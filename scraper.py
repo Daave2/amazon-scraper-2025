@@ -213,6 +213,10 @@ pending_chat_entries: List[Dict[str, str]] = []
 pending_chat_lock = asyncio.Lock()
 chat_batch_count = 0
 
+# Track all submitted store data for performance highlights
+submitted_store_data: List[Dict[str, str]] = []
+submitted_data_lock = asyncio.Lock()
+
 playwright = None
 browser = None
 
@@ -1010,6 +1014,131 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
         app_logger.error(f"Error posting job summary: {e}", exc_info=DEBUG_MODE)
 
 
+async def post_performance_highlights(store_data: List[Dict[str, str]]):
+    """Send performance highlight cards for bottom performers."""
+    if not CHAT_WEBHOOK_URL or not store_data:
+        return
+    
+    try:
+        # Parse metrics from strings to numeric values
+        parsed_stores = []
+        for entry in store_data:
+            try:
+                # Parse lates percentage
+                lates_str = entry.get('lates', '0 %')
+                lates_val = float(re.sub(r'[^0-9.]', '', lates_str))
+                
+                # Parse INF percentage
+                inf_str = entry.get('inf', '0.0 %')
+                inf_val = float(re.sub(r'[^0-9.]', '', inf_str))
+                
+                # Parse UPH value
+                uph_str = entry.get('uph', '0')
+                uph_val = float(re.sub(r'[^0-9.]', '', uph_str))
+                
+                parsed_stores.append({
+                    'store': entry.get('store', 'Unknown'),
+                    'lates': lates_val,
+                    'lates_str': lates_str,
+                    'inf': inf_val,
+                    'inf_str': inf_str,
+                    'uph': uph_val,
+                    'uph_str': uph_str
+                })
+            except (ValueError, TypeError) as e:
+                app_logger.warning(f"Could not parse metrics for {entry.get('store', 'Unknown')}: {e}")
+                continue
+        
+        if not parsed_stores:
+            app_logger.warning("No valid store data to create performance highlights")
+            return
+        
+        # Sort to find bottom performers
+        sorted_by_lates = sorted(parsed_stores, key=lambda x: x['lates'], reverse=True)[:5]
+        highest_inf = max(parsed_stores, key=lambda x: x['inf'])
+        lowest_uph = min(parsed_stores, key=lambda x: x['uph'])
+        
+        # Build cards
+        sections = []
+        
+        # Card 1: Bottom 5 Lates
+        if sorted_by_lates:
+            lates_grid_items = [
+                {"title": "Store", "textAlignment": "START"},
+                {"title": "Lates %", "textAlignment": "CENTER"},
+            ]
+            for store in sorted_by_lates:
+                lates_grid_items.extend([
+                    {"title": sanitize_store_name(store['store']), "textAlignment": "START"},
+                    {"title": f"❌ {store['lates_str']}", "textAlignment": "CENTER"},
+                ])
+            
+            sections.append({
+                "header": "⚠️ Bottom 5 Stores: Highest Lates %",
+                "widgets": [{
+                    "grid": {
+                        "title": "Stores with Highest Late Percentages",
+                        "columnCount": 2,
+                        "borderStyle": {"type": "STROKE", "cornerRadius": 4},
+                        "items": lates_grid_items
+                    }
+                }]
+            })
+        
+        # Card 2: Highest INF
+        sections.append({
+            "header": "⚠️ Highest INF Store",
+            "widgets": [{
+                "decoratedText": {
+                    "topLabel": "Store with Highest Item Not Found Rate",
+                    "text": f"{sanitize_store_name(highest_inf['store'])} - {highest_inf['inf_str']}",
+                    "startIcon": {"knownIcon": "STAR"}
+                }
+            }]
+        })
+        
+        # Card 3: Lowest UPH
+        sections.append({
+            "header": "⚠️ Lowest UPH Store",
+            "widgets": [{
+                "decoratedText": {
+                    "topLabel": "Store with Lowest Units Per Hour",
+                    "text": f"{sanitize_store_name(lowest_uph['store'])} - {lowest_uph['uph_str']} UPH",
+                    "startIcon": {"knownIcon": "STAR"}
+                }
+            }]
+        })
+        
+        # Send the card
+        payload = {
+            "cardsV2": [{
+                "cardId": f"performance-highlights-{int(datetime.now().timestamp())}",
+                "card": {
+                    "header": {
+                        "title": "📊 Performance Highlights",
+                        "subtitle": datetime.now(LOCAL_TIMEZONE).strftime("%A %d %B, %H:%M"),
+                        "imageUrl": "https://i.imgur.com/u0e3d2x.png",
+                        "imageType": "CIRCLE"
+                    },
+                    "sections": sections,
+                },
+            }]
+        }
+        
+        timeout = aiohttp.ClientTimeout(total=30)
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+            async with session.post(CHAT_WEBHOOK_URL, json=payload) as resp:
+                if resp.status != 200:
+                    app_logger.error(f"Performance highlights post failed: {resp.status}")
+                else:
+                    app_logger.info("Performance highlights posted successfully")
+
+    except Exception as e:
+        app_logger.error(f"Error posting performance highlights: {e}", exc_info=DEBUG_MODE)
+
+
 async def add_to_pending_chat(entry: Dict[str, str]):
     if not CHAT_WEBHOOK_URL:
         return
@@ -1052,6 +1181,11 @@ async def log_submission(data: Dict[str,str]):
                 await f.write(json.dumps(log_entry) + '\n')
         except IOError as e:
             app_logger.error(f"Error writing to JSON log file {JSON_LOG_FILE}: {e}")
+        
+        # Track submitted data for performance highlights
+        async with submitted_data_lock:
+            submitted_store_data.append(data)
+        
         await add_to_pending_chat(log_entry)
 
 async def http_form_submitter_worker(queue: Queue, worker_id: int):
@@ -1363,11 +1497,18 @@ async def process_urls():
         failures=run_failures,
         duration=elapsed
     )
+    
+    # Send Performance Highlights
+    async with submitted_data_lock:
+        if submitted_store_data:
+            await post_performance_highlights(submitted_store_data)
+            submitted_store_data.clear()  # Clear data after sending
 
     if run_failures:
         app_logger.warning(f"Completed with {len(run_failures)} issue(s): {', '.join(run_failures)}")
     else:
         app_logger.info("Completed successfully.")
+
 
 #######################################################################
 #                         MAIN EXECUTION BLOCK
