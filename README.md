@@ -36,6 +36,11 @@ https://github.com/user-attachments/assets/7ba7f0f6-4d0b-4cc2-9937-de5ad766fea4
   - Resilience Metrics (Retries, Stores Retried)
   - Speed Breakdown (Avg Collection Time, p95 Latency, Bottleneck Analysis)
   - Failure Analysis (Breakdown by error type and list of failed stores)
+- **Performance Highlights**: Automatically identifies and reports the "Bottom 5" stores for key metrics:
+  - **Lates**: Highest percentage of late orders
+  - **INF**: Highest Item Not Found rate
+  - **UPH**: Lowest Units Per Hour
+- **Smart Filtering**: Automatically excludes stores with 0 orders from all chat reports to reduce noise.
 
 ## Requirements
 
@@ -73,6 +78,16 @@ python scraper.py
 ```
 
 Logs and submission data will be saved under the `output/` directory.
+
+## Running Tests
+
+The project includes a suite of unit tests using `pytest`. To run them:
+
+```bash
+pytest
+```
+
+This will execute tests for the webhook module, verifying filtering logic, sorting, and message formatting.
 
 ## GitHub Actions Workflow
 

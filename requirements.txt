@@ -6,3 +6,5 @@ pytz
 aiohttp
 certifi
 aiofiles
+pytest
+pytest-asyncio
