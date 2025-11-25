@@ -24,6 +24,7 @@ from date_range import get_date_time_range_from_config, apply_date_time_range
 from webhook import (post_to_chat_webhook, post_job_summary, post_performance_highlights,
                     add_to_pending_chat, flush_pending_chat_entries, log_submission)
 from workers import auto_concurrency_manager, http_form_submitter_worker, process_single_store, worker_task
+from inf_scraper import run_inf_analysis
 
 #######################################################################
 #                             APP SETUP & LOGGING
@@ -337,11 +338,55 @@ async def process_urls():
     await post_job_summary(progress['total'], progress['current'], run_failures, elapsed,
                           CHAT_WEBHOOK_URL, metrics_lock, metrics, LOCAL_TIMEZONE, DEBUG_MODE, app_logger)
     
-    # Send Performance Highlights
+    # Send Performance Highlights & Trigger INF Deep Dive
     async with submitted_data_lock:
         if submitted_store_data:
+            # 1. Send Performance Highlights
             await post_performance_highlights(submitted_store_data, CHAT_WEBHOOK_URL, sanitize_wrapper,
                                              LOCAL_TIMEZONE, DEBUG_MODE, app_logger)
+            
+            # 2. Identify Bottom 5 INF Stores for Deep Dive
+            app_logger.info("Identifying bottom 5 INF stores for deep dive analysis...")
+            try:
+                # Create a lookup for full store details
+                store_lookup = {s['store_name']: s for s in urls_data}
+                
+                # Parse INF and sort
+                def parse_inf(item):
+                    try:
+                        return float(item.get('inf', '0').replace('%', '').strip())
+                    except:
+                        return -1.0
+
+                # Filter for stores that actually have data and exist in lookup
+                # Also exclude stores with 0 orders if desired, but for INF, high INF on low orders is still bad.
+                valid_stores = [s for s in submitted_store_data if s.get('store') in store_lookup]
+                
+                # Sort by INF descending (Higher INF is worse)
+                sorted_by_inf = sorted(valid_stores, key=parse_inf, reverse=True)
+                
+                # Take top 10
+                bottom_10_inf = sorted_by_inf[:10]
+                
+                target_stores_for_inf = []
+                for s in bottom_10_inf:
+                    full_details = store_lookup.get(s['store'])
+                    if full_details:
+                        # Create a copy to avoid modifying the original urls_data
+                        store_with_inf = full_details.copy()
+                        store_with_inf['inf_rate'] = s.get('inf', 'N/A')
+                        target_stores_for_inf.append(store_with_inf)
+                
+                if target_stores_for_inf:
+                    app_logger.info(f"Triggering INF analysis for {len(target_stores_for_inf)} stores: {[s['store_name'] for s in target_stores_for_inf]}")
+                    # Run INF analysis using the existing browser
+                    await run_inf_analysis(target_stores_for_inf, browser)
+                else:
+                    app_logger.info("No stores found for INF analysis.")
+                    
+            except Exception as e:
+                app_logger.error(f"Failed to run INF analysis: {e}", exc_info=True)
+
             submitted_store_data.clear()
 
     if run_failures:

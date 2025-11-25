@@ -96,6 +96,7 @@ async def navigate_and_extract_inf(page: Page, store_name: str):
                 cells = row.locator("td")
                 
                 # Columns: image(0), sku(1), product_name(2), inf_units(3), etc.
+                img_url = await cells.nth(0).locator("img").get_attribute("src")
                 sku = await cells.nth(1).locator("span").inner_text()
                 product_name = await cells.nth(2).locator("a span").inner_text()
                 inf_units = await cells.nth(3).locator("span").inner_text()
@@ -110,7 +111,8 @@ async def navigate_and_extract_inf(page: Page, store_name: str):
                     "store": store_name,
                     "sku": sku,
                     "name": product_name,
-                    "inf": inf_value
+                    "inf": inf_value,
+                    "image_url": img_url
                 })
             except Exception as e:
                 app_logger.warning(f"[{store_name}] Error extracting row {i}: {e}")
@@ -128,6 +130,7 @@ async def process_store_task(context, store_info, results_list, results_lock, fa
     marketplace_id = store_info['marketplace_id']
     store_name = store_info['store_name']
     store_number = store_info.get('store_number', '')
+    inf_rate = store_info.get('inf_rate', 'N/A')
     
     page = None
     try:
@@ -160,7 +163,7 @@ async def process_store_task(context, store_info, results_list, results_lock, fa
                 app_logger.warning(f"[{store_name}] Failed to enrich with stock data: {e}")
         
         async with results_lock:
-            results_list.append((store_name, store_number, items))
+            results_list.append((store_name, store_number, items, inf_rate))
             
     except Exception as e:
         app_logger.error(f"Failed to process {store_name}: {e}")
@@ -216,10 +219,13 @@ async def worker(worker_id: int, browser: Browser, storage_state: Dict, job_queu
                 pass
         app_logger.info(f"[Worker-{worker_id}] Finished.")
 
-async def send_inf_report(store_data: List[tuple], network_top_10: List):
-    """
-    Send INF report to Google Chat.
-    store_data is a list of tuples: (store_name, store_number, items)
+async def send_inf_report(store_data, network_top_10, skip_network_report=False):
+    """Send INF report to Google Chat
+    
+    Args:
+        store_data: List of tuples (store_name, store_number, items, inf_rate)
+        network_top_10: List of top 10 items network-wide
+        skip_network_report: If True, skip sending the network-wide summary
     """
     import aiohttp
     import ssl
@@ -233,96 +239,119 @@ async def send_inf_report(store_data: List[tuple], network_top_10: List):
     connector = aiohttp.TCPConnector(ssl=ssl_context)
     timeout = aiohttp.ClientTimeout(total=30)
     
-    # Message 1: Network Wide Top 10
-    sections_network = []
-    widgets_network = []
-    widgets_network.append({"textParagraph": {"text": "<b>🏆 Top 10 Network Wide (INF Occurrences)</b>"}})
-    
-    for item in network_top_10:
-        text = f"<b>{item['inf']}</b> - {item['name']}"
-        widgets_network.append({"textParagraph": {"text": text}})
+    # Message 1: Network Wide Top 10 (skip if requested)
+    if not skip_network_report:
+        sections_network = []
+        widgets_network = []
+        widgets_network.append({"textParagraph": {"text": "<b>🏆 Top 10 Network Wide (INF Occurrences)</b>"}})
         
-    sections_network.append({"widgets": widgets_network})
-    
-    payload_network = {
-        "cardsV2": [{
-            "cardId": f"inf-network-{int(datetime.now().timestamp())}",
-            "card": {
-                "header": {
-                    "title": "INF Analysis - Network Wide",
-                    "subtitle": datetime.now(LOCAL_TIMEZONE).strftime("%A %d %B, %H:%M"),
-                    "imageUrl": "https://cdn-icons-png.flaticon.com/512/272/272525.png",
-                    "imageType": "CIRCLE"
+        for item in network_top_10:
+            text = f"<b>{item['inf']}</b> - {item['name']}"
+            widgets_network.append({"textParagraph": {"text": text}})
+            
+        sections_network.append({"widgets": widgets_network})
+        
+        payload_network = {
+            "cardsV2": [{
+                "cardId": f"inf-network-{int(datetime.now().timestamp())}",
+                "card": {
+                    "header": {
+                        "title": "INF Analysis - Network Wide",
+                        "subtitle": datetime.now(LOCAL_TIMEZONE).strftime("%A %d %B, %H:%M"),
+                        "imageUrl": "https://cdn-icons-png.flaticon.com/512/272/272525.png",
+                        "imageType": "CIRCLE"
+                    },
+                    "sections": sections_network,
                 },
-                "sections": sections_network,
-            },
-        }]
-    }
+            }]
+        }
+        
+        # Send network-wide report
+        try:
+            async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+                async with session.post(CHAT_WEBHOOK_URL, json=payload_network) as resp:
+                    if resp.status != 200:
+                        app_logger.error(f"Failed to send network INF report: {await resp.text()}")
+                    else:
+                        app_logger.info("Network-wide INF report sent successfully.")
+        except Exception as e:
+            app_logger.error(f"Error sending network INF report: {e}")
+            return
     
-    # Send network-wide report
-    try:
-        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-            async with session.post(CHAT_WEBHOOK_URL, json=payload_network) as resp:
-                if resp.status != 200:
-                    app_logger.error(f"Failed to send network INF report: {await resp.text()}")
-                else:
-                    app_logger.info("Network-wide INF report sent successfully.")
-    except Exception as e:
-        app_logger.error(f"Error sending network INF report: {e}")
-        return
+    # Message 2+: All Stores (sorted by INF rate, highest first)
+    # Sort by INF rate (descending - highest first)
+    def parse_inf_rate(store_tuple):
+        inf_rate_str = store_tuple[3]  # inf_rate is 4th element
+        try:
+            return float(inf_rate_str.replace('%', '').strip()) if inf_rate_str != 'N/A' else -1.0
+        except:
+            return -1.0
     
-    # Message 2+: All Stores (split into batches to avoid size limits)
-    # Sort by store name
-    sorted_store_data = sorted(store_data, key=lambda x: x[0])
-    stores_with_data = [(name, num, items) for name, num, items in sorted_store_data if items]
+    sorted_store_data = sorted(store_data, key=parse_inf_rate, reverse=True)
+    stores_with_data = [(name, num, items, inf_rate) for name, num, items, inf_rate in sorted_store_data if items]
     
-    # Batch size set to 25 as we are limiting to top 5 items and removing location data
-    BATCH_SIZE = 25
+    # Batch size set to 10 as images take more space/payload
+    BATCH_SIZE = 10
     batches = [stores_with_data[i:i + BATCH_SIZE] for i in range(0, len(stores_with_data), BATCH_SIZE)]
     
     for batch_num, batch in enumerate(batches, 1):
         sections_stores = []
         
-        for store_name, store_number, items in batch:
+        for store_name, store_number, items, inf_rate in batch:
             widgets_store = []
             clean_store_name = sanitize_store_name(store_name, STORE_PREFIX_RE)
             total_inf = sum(item['inf'] for item in items)
             
-            # Add store number if available
-            if store_number:
-                header_text = f"<b>#{store_number} {clean_store_name}</b> (Total: {total_inf})"
-            else:
-                header_text = f"<b>{clean_store_name}</b> (Total: {total_inf})"
-                
-            widgets_store.append({"textParagraph": {"text": header_text}})
+            # Header with INF Rate
+            inf_display = f"INF: {inf_rate}" if inf_rate != 'N/A' else f"Total INF: {total_inf}"
+            section_header = f"#{store_number} {clean_store_name} | {inf_display}"
             
-            # Show top 5 items with stock data if available (Location removed per request)
+            # Show top 5 items with card layout
             for item in items[:5]:
-                # Build item text with INF count and product name
-                item_parts = [f"{item['inf']} - {item['name']}"]
+                # Build Columns Widget
+                img_url = item.get('image_url', '')
                 
-                # Add stock info if available
+                # Text Details
+                details = f"<b>{item['name']}</b>\nSKU: {item['sku']}\nINF Units: {item['inf']}"
                 if item.get('stock_on_hand') is not None:
                     stock_qty = item.get('stock_on_hand', 0)
                     stock_unit = item.get('stock_unit', '')
-                    item_parts.append(f"📦 Stock: {stock_qty} {stock_unit}".strip())
+                    details += f" | Stock: {stock_qty} {stock_unit}"
                 
-                # Format the full item text
-                if len(item_parts) > 1:
-                    # Multi-line format for enriched data
-                    main_text = item_parts[0]
-                    widgets_store.append({"textParagraph": {"text": f"  <b>{main_text}</b>"}})
-                    
-                    # Add stock as sub-items
-                    for extra in item_parts[1:]:
-                        widgets_store.append({"textParagraph": {"text": f"    {extra}"}})
-                else:
-                    # Simple one-line format
-                    widgets_store.append({"textParagraph": {"text": f"  {item_parts[0]}"}})
-                 
-            # Use store number in header if available
-            section_header = f"#{store_number} {clean_store_name}" if store_number else clean_store_name
-            sections_stores.append({"header": section_header, "collapsible": True, "widgets": widgets_store})
+                # Column 1: Image (if available)
+                col1_widgets = []
+                if img_url:
+                    col1_widgets.append({"image": {"imageUrl": img_url}})
+                
+                # Column 2: Text
+                col2_widgets = [{"textParagraph": {"text": details}}]
+                
+                columns_widget = {
+                    "columns": {
+                        "columnItems": [
+                            {
+                                "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
+                                "horizontalAlignment": "CENTER",
+                                "widgets": col1_widgets
+                            },
+                            {
+                                "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
+                                "horizontalAlignment": "START",
+                                "widgets": col2_widgets
+                            }
+                        ]
+                    }
+                }
+                widgets_store.append(columns_widget)
+                widgets_store.append({"divider": {}})
+            
+            # Add collapsible section
+            sections_stores.append({
+                "header": section_header,
+                "collapsible": True,
+                "uncollapsibleWidgetsCount": 0,
+                "widgets": widgets_store
+            })
         
         payload_stores = {
             "cardsV2": [{
@@ -359,25 +388,56 @@ async def send_inf_report(store_data: List[tuple], network_top_10: List):
         except Exception as e:
             app_logger.error(f"Error sending store batch {batch_num}: {e}")
 
-async def main():
-    app_logger.info("Starting INF Scraper with Dynamic Concurrency...")
+async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: Browser = None):
+    app_logger.info("Starting INF Analysis...")
     
-    # Load stores
-    urls_data = []
-    load_default_data(urls_data, app_logger)
-    if not urls_data:
-        app_logger.error("No stores found.")
-        return
+    # Load stores if not provided
+    if target_stores is None:
+        urls_data = []
+        load_default_data(urls_data, app_logger)
+        if not urls_data:
+            app_logger.error("No stores found.")
+            return
+    else:
+        urls_data = target_stores
+        app_logger.info(f"Analyzing {len(urls_data)} provided stores.")
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=not DEBUG_MODE)
+    # Manage browser lifecycle
+    local_playwright = None
+    browser = provided_browser
+    
+    try:
+        if not browser:
+            local_playwright = await async_playwright().start()
+            browser = await local_playwright.chromium.launch(headless=not DEBUG_MODE)
         
         # Auth
-        if not ensure_storage_state(STORAGE_STATE, app_logger):
-             app_logger.info("State missing, attempting login...")
+        login_needed = True
+        if ensure_storage_state(STORAGE_STATE, app_logger):
+            app_logger.info("State file found, verifying session...")
+            try:
+                # Create a temporary context to check login status
+                temp_context = await browser.new_context(storage_state=STORAGE_STATE)
+                temp_page = await temp_context.new_page()
+                
+                # Check if we are actually logged in
+                test_url = "https://sellercentral.amazon.co.uk/home"
+                if not await check_if_login_needed(temp_page, test_url, PAGE_TIMEOUT, DEBUG_MODE, app_logger):
+                    app_logger.info("Session is valid.")
+                    login_needed = False
+                else:
+                    app_logger.info("Session is invalid or expired.")
+                
+                await temp_context.close()
+            except Exception as e:
+                app_logger.error(f"Error verifying session: {e}")
+        
+        if login_needed:
+             app_logger.info("Performing login...")
              page = await browser.new_page()
              if not await perform_login_and_otp(page, LOGIN_URL, config, PAGE_TIMEOUT, DEBUG_MODE, app_logger, _save_screenshot):
                  app_logger.error("Login failed.")
+                 if local_playwright: await local_playwright.stop()
                  return
              await page.context.storage_state(path=STORAGE_STATE)
              await page.close()
@@ -413,7 +473,6 @@ async def main():
             ))
         
         # Launch Workers
-        # We launch enough workers to cover the MAX concurrency, but they will be throttled by the condition
         num_workers = min(AUTO_MAX_CONCURRENCY, len(urls_data))
         app_logger.info(f"Launching {num_workers} workers (Initial Concurrency Limit: {INITIAL_CONCURRENCY})...")
         
@@ -427,10 +486,10 @@ async def main():
         await asyncio.gather(*workers)
         
         # Process Results
-        # results_list contains tuples of (store_name, store_number, items)
+        # results_list contains tuples of (store_name, store_number, items, inf_rate)
         all_items = []
         
-        for store_name, store_number, items in results_list:
+        for store_name, store_number, items, inf_rate in results_list:
             all_items.extend(items)
         
         # Calculate Network Wide Top 10
@@ -445,10 +504,17 @@ async def main():
         network_list.sort(key=lambda x: x['inf'], reverse=True)
         network_top_10 = network_list[:10]
         
-        # Send Report - pass the full results_list with store numbers
-        await send_inf_report(results_list, network_top_10)
+        # Send Report - skip network-wide report if called from main scraper with specific stores
+        skip_network = target_stores is not None
+        await send_inf_report(results_list, network_top_10, skip_network_report=skip_network)
         
-        await browser.close()
+    finally:
+        if local_playwright:
+            if browser: await browser.close()
+            await local_playwright.stop()
+
+async def main():
+    await run_inf_analysis()
 
 if __name__ == "__main__":
     asyncio.run(main())

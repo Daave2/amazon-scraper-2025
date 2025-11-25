@@ -251,7 +251,14 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
     """
     Send highlights using COLUMNS layout to support HTML COLORING.
     """
-    if not chat_webhook_url or not store_data: return
+    app_logger.info(f"post_performance_highlights called with {len(store_data) if store_data else 0} stores")
+    
+    if not chat_webhook_url:
+        app_logger.warning("No chat webhook URL provided to post_performance_highlights")
+        return
+    if not store_data:
+        app_logger.warning("No store data provided to post_performance_highlights")
+        return
     
     try:
         parsed_stores = []
@@ -271,10 +278,14 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
                 })
             except: continue
         
-        if not parsed_stores: return
+        app_logger.info(f"Parsed {len(parsed_stores)} stores with data (after filtering 0 orders)")
+        
+        if not parsed_stores:
+            app_logger.warning("No stores with non-zero orders to report")
+            return
         
         sorted_by_lates = sorted(parsed_stores, key=lambda x: x['lates'], reverse=True)[:5]
-        sorted_by_inf = sorted(parsed_stores, key=lambda x: x['inf'], reverse=True)[:5]
+        # sorted_by_inf removed as it is now handled by the detailed INF scraper report
         sorted_by_uph = sorted(parsed_stores, key=lambda x: x['uph'])[:5]
         
         sections = []
@@ -302,15 +313,19 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
             return {"header": title, "widgets": widgets}
 
         if sorted_by_lates and sorted_by_lates[0]['lates'] > 0:
+            app_logger.info(f"Adding Lates section (top: {sorted_by_lates[0]['lates']}%)")
             sections.append(build_colored_widgets("⚠️ Highest Lates %", sorted_by_lates, 'lates_str'))
         
-        if sorted_by_inf and sorted_by_inf[0]['inf'] > 0:
-            sections.append(build_colored_widgets("⚠️ Highest INF %", sorted_by_inf, 'inf_str'))
-            
         if sorted_by_uph:
+            app_logger.info(f"Adding UPH section (lowest: {sorted_by_uph[0]['uph']})")
             sections.append(build_colored_widgets("⚠️ Lowest UPH", sorted_by_uph, 'uph_str'))
 
+        app_logger.info(f"Performance highlights sections to send: {len(sections)}")
+        
         if sections:
+            import ssl
+            import certifi
+            
             payload = {
                 "cardsV2": [{
                     "cardId": f"perf-high-{int(datetime.now().timestamp())}",
@@ -325,8 +340,16 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
                     },
                 }]
             }
-            async with aiohttp.ClientSession() as session:
-                await session.post(chat_webhook_url, json=payload)
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                resp = await session.post(chat_webhook_url, json=payload)
+                if resp.status == 200:
+                    app_logger.info("Performance highlights sent successfully")
+                else:
+                    app_logger.error(f"Failed to send performance highlights: {resp.status}")
+        else:
+            app_logger.warning("No sections to send in performance highlights")
 
     except Exception as e:
         app_logger.error(f"Error posting highlights: {e}", exc_info=debug_mode)

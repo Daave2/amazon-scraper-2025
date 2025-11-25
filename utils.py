@@ -32,6 +32,11 @@ def setup_logging():
         Logger: Configured logger instance used throughout the app.
     """
     app_logger = logging.getLogger('app')
+    
+    # Clear existing handlers to prevent duplicates
+    if app_logger.handlers:
+        app_logger.handlers.clear()
+    
     app_logger.setLevel(logging.INFO)
     app_file = RotatingFileHandler('app.log', maxBytes=10**7, backupCount=5)
     fmt = LocalTimeFormatter('%(asctime)s %(levelname)s %(message)s')
