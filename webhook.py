@@ -20,16 +20,22 @@ COLOR_RED = "#C62828"   # Dark Red
 
 def _format_metric_with_emoji(value_str: str, threshold: float, emoji_green: str, 
                               emoji_red: str, is_uph: bool = False) -> str:
-    """Applies a pass/fail emoji to a metric string based on a threshold (For Grid)."""
+    """
+    Applies a pass/fail emoji.
+    COMPACT MODE: Removes spaces and '%' symbols to save width on mobile.
+    """
     try:
+        # Clean string to just numbers and decimal point
         clean_str = re.sub(r'[^\d.]', '', value_str)
         if not clean_str:
-            return value_str
+            return value_str.replace(" ", "") # Return compacted string
             
         numeric_value = float(clean_str)
         is_good = (numeric_value >= threshold) if is_uph else (numeric_value <= threshold)
         emoji = emoji_green if is_good else emoji_red
-        return f"{emoji} {value_str}"
+        
+        # Mobile Optimization: No space between emoji and number, no % sign
+        return f"{emoji}{clean_str}"
     except (ValueError, TypeError):
         return value_str
 
@@ -39,7 +45,10 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
                                uph_threshold: float, lates_threshold: float, inf_threshold: float,
                                emoji_green: str, emoji_red: str, local_timezone, debug_mode: bool, app_logger):
     """
-    Send a report using the GRID layout (Clean borders, Emojis).
+    Send a report using a MOBILE-OPTIMIZED GRID layout.
+    - No Borders (Saves padding)
+    - Short Headers
+    - Compact Metrics
     """
     if not chat_webhook_url or not entries:
         return
@@ -66,13 +75,14 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
 
         sorted_entries = sorted(filtered_entries, key=lambda e: sanitize_func(e.get("store", "")))
 
-        # --- GRID LAYOUT (Cleanest for big lists) ---
+        # --- COMPACT GRID LAYOUT ---
+        # Shortened titles for Mobile readability
         grid_items = [
             {"title": "Store", "textAlignment": "START"},
-            {"title": "Orders", "textAlignment": "CENTER"},
+            {"title": "Ord", "textAlignment": "CENTER"},   # Was "Orders"
             {"title": "UPH", "textAlignment": "CENTER"},
-            {"title": "Lates", "textAlignment": "CENTER"},
-            {"title": "INF", "textAlignment": "CENTER"},
+            {"title": "Lat%", "textAlignment": "CENTER"},  # Was "Lates", added % to header
+            {"title": "INF%", "textAlignment": "CENTER"},  # Was "INF", added % to header
         ]
 
         for entry in sorted_entries:
@@ -87,13 +97,18 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
             lates_val = entry.get("lates", "0.0 %") or "0.0 %"
             inf_val = entry.get("inf", "0.0 %") or "0.0 %"
 
-            # Apply emoji formatting
+            # Apply emoji formatting (Compacted)
             formatted_uph = _format_metric_with_emoji(uph_val, uph_threshold, emoji_green, emoji_red, is_uph=True)
             formatted_lates = _format_metric_with_emoji(lates_val, lates_threshold, emoji_green, emoji_red)
             formatted_inf = _format_metric_with_emoji(inf_val, inf_threshold, emoji_green, emoji_red)
 
+            # Store Name: Truncate nicely if too long for mobile column
+            store_name = sanitize_func(entry.get("store", "N/A"))
+            # Optional: aggressive truncation for very long names if needed
+            # if len(store_name) > 15: store_name = store_name[:14] + "…"
+
             grid_items.extend([
-                {"title": sanitize_func(entry.get("store", "N/A")), "textAlignment": "START"},
+                {"title": store_name, "textAlignment": "START"},
                 {"title": orders_val, "textAlignment": "CENTER"},
                 {"title": formatted_uph, "textAlignment": "CENTER"},
                 {"title": formatted_lates, "textAlignment": "CENTER"},
@@ -106,7 +121,8 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
                 "grid": {
                     "title": "Performance Summary",
                     "columnCount": 5, 
-                    "borderStyle": {"type": "STROKE", "cornerRadius": 4},
+                    # NO_BORDER saves significant width padding on mobile
+                    "borderStyle": {"type": "NO_BORDER"}, 
                     "items": grid_items
                 }
             }]
@@ -234,7 +250,6 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
                                       sanitize_func, local_timezone, debug_mode: bool, app_logger):
     """
     Send highlights using COLUMNS layout to support HTML COLORING.
-    Use HTML colors for strong emphasis on 'Bad' metrics.
     """
     if not chat_webhook_url or not store_data: return
     
