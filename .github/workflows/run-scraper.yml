@@ -126,7 +126,8 @@ jobs:
           "num_form_submitters": 2,
           "page_timeout_ms": 90000,
           "element_wait_timeout_ms": 20000,
-          "auto_concurrency": { "enabled": true }
+          "auto_concurrency": { "enabled": true },
+          "use_date_range": false
         }
         JSON
 
@@ -139,8 +140,8 @@ jobs:
         if_no_artifact_found: warn
         search_artifacts: true
 
-    - name: Run scraper
-      run: python scraper.py
+    - name: Run scraper (today mode)
+      run: python scraper.py --date-mode today
 
     - name: Upload artifacts on failure or success
       if: always()
