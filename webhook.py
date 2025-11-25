@@ -45,7 +45,8 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
             card_subtitle += f" • 📅 {date_range['start_date']} - {date_range['end_date']}"
 
         # Filter out stores with 0 orders
-        entries = [e for e in entries if int(e.get('orders', '0')) > 0]
+        # Filter out stores with 0 orders
+        entries = [e for e in entries if int(float(e.get('orders', '0'))) > 0]
 
         sorted_entries = sorted(entries, key=lambda e: sanitize_func(e.get("store", "")))
 
@@ -261,7 +262,7 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
         for entry in store_data:
             try:
                 # Filter out stores with 0 orders
-                if int(entry.get('orders', '0')) == 0:
+                if int(float(entry.get('orders', '0'))) == 0:
                     continue
 
                 lates_str = entry.get('lates', '0 %')
