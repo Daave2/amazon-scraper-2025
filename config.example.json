@@ -28,5 +28,8 @@
     "mem_upper_threshold": 90,
     "check_interval_seconds": 5,
     "cooldown_seconds": 15
-  }
+  },
+  "morrisons_api_key": "YOUR_MORRISONS_API_KEY",
+  "morrisons_bearer_token_url": "https://gist.githubusercontent.com/YOUR_USERNAME/GIST_ID/raw/FILE",
+  "enrich_stock_data": true
 }

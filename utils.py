@@ -66,17 +66,19 @@ def load_default_data(urls_data: List[Dict], app_logger):
     """Load store data from urls.csv."""
     urls_data.clear()
     try:
-        with open('urls.csv', 'r', newline='') as f:
+        with open('urls.csv', 'r', newline='', encoding='utf-8') as f:
             reader = csv.reader(f)
             header = next(reader)
             for i, row in enumerate(reader):
                 if not row or len(row) < 4:
                     app_logger.warning(f"Skipping malformed row {i+2} in urls.csv: {row}")
                     continue
+                # CSV columns: store_number, merchant_id, new_id, store_name, marketplace_id
                 urls_data.append({
-                    'merchant_id': row[0].strip(),
-                    'store_name': row[2].strip(),
-                    'marketplace_id': row[3].strip()
+                    'store_number': row[0].strip() if len(row) > 0 else '',
+                    'merchant_id': row[1].strip() if len(row) > 1 else '',
+                    'store_name': row[3].strip() if len(row) > 3 else '',
+                    'marketplace_id': row[4].strip() if len(row) > 4 else ''
                 })
         app_logger.info(f"{len(urls_data)} stores loaded from urls.csv")
     except FileNotFoundError:
