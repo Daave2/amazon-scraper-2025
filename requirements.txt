@@ -8,3 +8,4 @@ certifi
 aiofiles
 pytest
 pytest-asyncio
+requests
