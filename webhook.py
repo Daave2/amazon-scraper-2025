@@ -85,7 +85,7 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
                     },
                     {
                         "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
-                        "horizontalAlignment": "END", # Aligns the Metrics header to the right
+                        "horizontalAlignment": "END", # Aligns the content to the right
                         "widgets": [{"textParagraph": {"text": "<b><font color=\"#5F6368\">Metrics (Orders | UPH | Lates | INF)</font></b>"}}]
                     }
                 ]
@@ -126,7 +126,7 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
                         {
                             # Right Column: Metrics
                             "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
-                            "horizontalAlignment": "END", # FIX: Aligns content to right on the COLUMN level
+                            "horizontalAlignment": "END", # FIX: Aligns text to the right here
                             "widgets": [{"textParagraph": {"text": metric_string}}]
                         }
                     ]
@@ -168,10 +168,10 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
     if not chat_webhook_url: return
     try:
         status_text = "Job Completed Successfully"
-        # status_icon is handled by the header configuration usually, 
-        # but here we just set the text. The logic below handles content.
+        status_icon = "check_circle"
         if failures:
             status_text = f"Job Completed with {len(failures)} Failures"
+            status_icon = "warning"
         
         success_rate = (success / total) * 100 if total > 0 else 0
         throughput_spm = (success / (duration / 60)) if duration > 0 else 0
@@ -258,7 +258,7 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
                 "cardId": f"job-summary-{int(datetime.now().timestamp())}",
                 "card": {
                     "header": {
-                        "title": f"{status_text}",
+                        "title": f"{status_icon} {status_text}",
                         "subtitle": datetime.now(local_timezone).strftime("%A %d %B, %H:%M"),
                         "imageUrl": "https://i.imgur.com/u0e3d2x.png",
                         "imageType": "CIRCLE"
@@ -313,8 +313,6 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
             widgets = []
             for store in stores:
                 # Color logic for highlights (Bad is Red)
-                # For Lates/INF: Higher is Bad (Red). For UPH: Lower is Bad (Red).
-                # Since these are "Bottom Performers", we default to Red for emphasis.
                 color = COLOR_RED 
                 
                 widgets.append({
@@ -327,7 +325,7 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
                             },
                             {
                                 "horizontalSizeStyle": "FILL_AVAILABLE_SPACE", 
-                                "horizontalAlignment": "END", # FIX: Align right on Column
+                                "horizontalAlignment": "END", # FIX: Align right on Column, not TextParagraph
                                 "widgets": [{"textParagraph": {"text": f'<font color="{color}"><b>{store[metric_str_key]}</b></font>'}}]
                             }
                         ]
