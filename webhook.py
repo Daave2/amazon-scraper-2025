@@ -135,7 +135,7 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
                     "header": {
                         "title": "Seller Central Metrics Report",
                         "subtitle": card_subtitle,
-                        "imageUrl": "https://i.imgur.com/u0e3d2x.png",
+                        "imageUrl": "https://static.vecteezy.com/system/resources/previews/006/724/659/non_2x/bar-chart-logo-icon-sign-symbol-design-vector.jpg",
                         "imageType": "CIRCLE"
                     },
                     "sections": [table_section],
@@ -228,7 +228,7 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
                     "header": {
                         "title": status_text,
                         "subtitle": datetime.now(local_timezone).strftime("%A %d %B, %H:%M"),
-                        "imageUrl": "https://i.imgur.com/u0e3d2x.png",
+                        "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTGVrSjsDJmQGLCuVWs2Z1fOj1pTcx0ELhBA&s",
                         "imageType": "CIRCLE"
                     },
                     "sections": [
@@ -318,7 +318,7 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
                         "header": {
                             "title": "📊 Performance Highlights",
                             "subtitle": "Stores requiring attention",
-                            "imageUrl": "https://i.imgur.com/u0e3d2x.png",
+                            "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTDtOSmbsPT97vo-A25rpgqFT5b6_xHxfuw4g&s",
                             "imageType": "CIRCLE"
                         },
                         "sections": sections,
