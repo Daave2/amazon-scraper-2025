@@ -110,6 +110,8 @@ jobs:
         LOGIN_PASSWORD:  ${{ secrets.LOGIN_PASSWORD }}
         OTP_SECRET_KEY:  ${{ secrets.OTP_SECRET_KEY }}
         CHAT_WEBHOOK_URL: ${{ secrets.CHAT_WEBHOOK_URL }}
+        MORRISONS_API_KEY: ${{ secrets.MORRISONS_API_KEY }}
+        MORRISONS_BEARER_TOKEN_URL: ${{ secrets.MORRISONS_BEARER_TOKEN_URL }}
       run: |
         cat > config.json <<JSON
         {
@@ -127,7 +129,10 @@ jobs:
           "page_timeout_ms": 90000,
           "element_wait_timeout_ms": 20000,
           "auto_concurrency": { "enabled": true },
-          "use_date_range": false
+          "use_date_range": false,
+          "morrisons_api_key": "${MORRISONS_API_KEY}",
+          "morrisons_bearer_token_url": "${MORRISONS_BEARER_TOKEN_URL}",
+          "enrich_stock_data": true
         }
         JSON
 
