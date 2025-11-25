@@ -15,12 +15,16 @@ import io
 from datetime import datetime
 from typing import List, Dict
 
-
 def _format_metric_with_emoji(value_str: str, threshold: float, emoji_green: str, 
                               emoji_red: str, is_uph: bool = False) -> str:
     """Applies a pass/fail emoji to a metric string based on a threshold."""
     try:
-        numeric_value = float(re.sub(r'[^\d.]', '', value_str))
+        # Clean string to just numbers and decimal point
+        clean_str = re.sub(r'[^\d.]', '', value_str)
+        if not clean_str:
+            return value_str
+            
+        numeric_value = float(clean_str)
         is_good = (numeric_value >= threshold) if is_uph else (numeric_value <= threshold)
         emoji = emoji_green if is_good else emoji_red
         return f"{emoji} {value_str}"
@@ -45,10 +49,20 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
             card_subtitle += f" • 📅 {date_range['start_date']} - {date_range['end_date']}"
 
         # Filter out stores with 0 orders
-        # Filter out stores with 0 orders
-        entries = [e for e in entries if int(float(e.get('orders', '0'))) > 0]
+        # FIXED: Use int(float()) to handle strings like '20.0'
+        filtered_entries = []
+        for e in entries:
+            try:
+                val = e.get('orders', '0')
+                if int(float(val)) > 0:
+                    filtered_entries.append(e)
+            except (ValueError, TypeError):
+                continue
 
-        sorted_entries = sorted(entries, key=lambda e: sanitize_func(e.get("store", "")))
+        if not filtered_entries:
+            return
+
+        sorted_entries = sorted(filtered_entries, key=lambda e: sanitize_func(e.get("store", "")))
 
         # --- Build the Grid/Table Widget with Emoji Indicators ---
         grid_items = [
@@ -261,16 +275,32 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
         parsed_stores = []
         for entry in store_data:
             try:
-                # Filter out stores with 0 orders
-                if int(float(entry.get('orders', '0'))) == 0:
+                # 1. ROBUST ORDER PARSING
+                # Handle '20.0' (string) -> 20.0 (float) -> 20 (int)
+                order_val = entry.get('orders', '0')
+                if not order_val: 
+                    continue
+                
+                # Double conversion handles "20" and "20.0" safely
+                if int(float(order_val)) == 0:
                     continue
 
+                # 2. SAFE METRIC PARSING (Prevents float('') crash)
+                def parse_metric(key, default_val='0'):
+                    raw_str = entry.get(key, default_val)
+                    # Remove non-numeric characters except decimal point
+                    clean_str = re.sub(r'[^0-9.]', '', raw_str)
+                    # Return 0.0 if string is empty (e.g. if input was "N/A")
+                    return float(clean_str) if clean_str else 0.0
+
                 lates_str = entry.get('lates', '0 %')
-                lates_val = float(re.sub(r'[^0-9.]', '', lates_str))
+                lates_val = parse_metric('lates')
+                
                 inf_str = entry.get('inf', '0.0 %')
-                inf_val = float(re.sub(r'[^0-9.]', '', inf_str))
+                inf_val = parse_metric('inf')
+                
                 uph_str = entry.get('uph', '0')
-                uph_val = float(re.sub(r'[^0-9.]', '', uph_str))
+                uph_val = parse_metric('uph')
                 
                 parsed_stores.append({
                     'store': entry.get('store', 'Unknown'),
@@ -279,7 +309,8 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
                     'uph': uph_val, 'uph_str': uph_str
                 })
             except (ValueError, TypeError) as e:
-                app_logger.warning(f"Could not parse metrics for {entry.get('store', 'Unknown')}: {e}")
+                # Log the specific value that caused the crash for debugging
+                app_logger.warning(f"Could not parse metrics for {entry.get('store', 'Unknown')}: {e} | Data: {entry}")
                 continue
         
         if not parsed_stores:
@@ -346,30 +377,31 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
             })
         
         # Send the card
-        payload = {
-            "cardsV2": [{
-                "cardId": f"performance-highlights-{int(datetime.now().timestamp())}",
-                "card": {
-                    "header": {
-                        "title": "📊 Performance Highlights",
-                        "subtitle": datetime.now(local_timezone).strftime("%A %d %B, %H:%M"),
-                        "imageUrl": "https://i.imgur.com/u0e3d2x.png",
-                        "imageType": "CIRCLE"
+        if sections:
+            payload = {
+                "cardsV2": [{
+                    "cardId": f"performance-highlights-{int(datetime.now().timestamp())}",
+                    "card": {
+                        "header": {
+                            "title": "📊 Performance Highlights",
+                            "subtitle": datetime.now(local_timezone).strftime("%A %d %B, %H:%M"),
+                            "imageUrl": "https://i.imgur.com/u0e3d2x.png",
+                            "imageType": "CIRCLE"
+                        },
+                        "sections": sections,
                     },
-                    "sections": sections,
-                },
-            }]
-        }
-        
-        timeout = aiohttp.ClientTimeout(total=30)
-        ssl_context = ssl.create_default_context(cafile=certifi.where())
-        connector = aiohttp.TCPConnector(ssl=ssl_context)
-        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-            async with session.post(chat_webhook_url, json=payload) as resp:
-                if resp.status != 200:
-                    app_logger.error(f"Performance highlights post failed: {resp.status}")
-                else:
-                    app_logger.info("Performance highlights posted successfully")
+                }]
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=30)
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+                async with session.post(chat_webhook_url, json=payload) as resp:
+                    if resp.status != 200:
+                        app_logger.error(f"Performance highlights post failed: {resp.status}")
+                    else:
+                        app_logger.info("Performance highlights posted successfully")
 
     except Exception as e:
         app_logger.error(f"Error posting performance highlights: {e}", exc_info=debug_mode)
