@@ -71,7 +71,6 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
         
         # --- Build Widgets using Columns for HTML support ---
         # Card limit is 100 widgets. Each store uses 1 widget (Columns).
-        # We also have headers/dividers.
         
         widgets = []
         
@@ -81,11 +80,13 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
                 "columnItems": [
                     {
                         "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
+                        "horizontalAlignment": "START",
                         "widgets": [{"textParagraph": {"text": "<b><font color=\"#5F6368\">Store Name</font></b>"}}]
                     },
                     {
                         "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
-                        "widgets": [{"textParagraph": {"text": "<b><font color=\"#5F6368\">Metrics (Orders | UPH | Lates | INF)</font></b>", "textAlignment": "END"}}]
+                        "horizontalAlignment": "END", # Aligns the Metrics header to the right
+                        "widgets": [{"textParagraph": {"text": "<b><font color=\"#5F6368\">Metrics (Orders | UPH | Lates | INF)</font></b>"}}]
                     }
                 ]
             }
@@ -119,18 +120,18 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
                         {
                             # Left Column: Store Name
                             "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
+                            "horizontalAlignment": "START",
                             "widgets": [{"textParagraph": {"text": f"<b>{sanitize_func(entry.get('store', 'N/A'))}</b>"}}]
                         },
                         {
                             # Right Column: Metrics
                             "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
-                            "widgets": [{"textParagraph": {"text": metric_string, "textAlignment": "END"}}]
+                            "horizontalAlignment": "END", # FIX: Aligns content to right on the COLUMN level
+                            "widgets": [{"textParagraph": {"text": metric_string}}]
                         }
                     ]
                 }
             })
-            # Optional: Add a subtle divider between rows if list is long, 
-            # but it consumes widget count. Skipping for density.
 
         # --- Assemble the final payload ---
         payload = {
@@ -167,10 +168,10 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
     if not chat_webhook_url: return
     try:
         status_text = "Job Completed Successfully"
-        status_icon = "check_circle" # Material Icon name
+        # status_icon is handled by the header configuration usually, 
+        # but here we just set the text. The logic below handles content.
         if failures:
             status_text = f"Job Completed with {len(failures)} Failures"
-            status_icon = "warning"
         
         success_rate = (success / total) * 100 if total > 0 else 0
         throughput_spm = (success / (duration / 60)) if duration > 0 else 0
@@ -312,7 +313,6 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
             widgets = []
             for store in stores:
                 # Color logic for highlights (Bad is Red)
-                val = store[metric_key]
                 # For Lates/INF: Higher is Bad (Red). For UPH: Lower is Bad (Red).
                 # Since these are "Bottom Performers", we default to Red for emphasis.
                 color = COLOR_RED 
@@ -320,8 +320,16 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
                 widgets.append({
                     "columns": {
                         "columnItems": [
-                            {"horizontalSizeStyle": "FILL_AVAILABLE_SPACE", "widgets": [{"textParagraph": {"text": sanitize_func(store['store'])}}]},
-                            {"horizontalSizeStyle": "FILL_AVAILABLE_SPACE", "widgets": [{"textParagraph": {"text": f'<font color="{color}"><b>{store[metric_str_key]}</b></font>', "textAlignment": "END"}}]}
+                            {
+                                "horizontalSizeStyle": "FILL_AVAILABLE_SPACE", 
+                                "horizontalAlignment": "START",
+                                "widgets": [{"textParagraph": {"text": sanitize_func(store['store'])}}]
+                            },
+                            {
+                                "horizontalSizeStyle": "FILL_AVAILABLE_SPACE", 
+                                "horizontalAlignment": "END", # FIX: Align right on Column
+                                "widgets": [{"textParagraph": {"text": f'<font color="{color}"><b>{store[metric_str_key]}</b></font>'}}]
+                            }
                         ]
                     }
                 })
