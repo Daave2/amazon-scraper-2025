@@ -44,6 +44,9 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
         if date_range:
             card_subtitle += f" • 📅 {date_range['start_date']} - {date_range['end_date']}"
 
+        # Filter out stores with 0 orders
+        entries = [e for e in entries if int(e.get('orders', '0')) > 0]
+
         sorted_entries = sorted(entries, key=lambda e: sanitize_func(e.get("store", "")))
 
         # --- Build the Grid/Table Widget with Emoji Indicators ---
@@ -257,6 +260,10 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
         parsed_stores = []
         for entry in store_data:
             try:
+                # Filter out stores with 0 orders
+                if int(entry.get('orders', '0')) == 0:
+                    continue
+
                 lates_str = entry.get('lates', '0 %')
                 lates_val = float(re.sub(r'[^0-9.]', '', lates_str))
                 inf_str = entry.get('inf', '0.0 %')
@@ -280,8 +287,8 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
         
         # Sort to find bottom performers
         sorted_by_lates = sorted(parsed_stores, key=lambda x: x['lates'], reverse=True)[:5]
-        highest_inf = max(parsed_stores, key=lambda x: x['inf'])
-        lowest_uph = min(parsed_stores, key=lambda x: x['uph'])
+        sorted_by_inf = sorted(parsed_stores, key=lambda x: x['inf'], reverse=True)[:5]
+        sorted_by_uph = sorted(parsed_stores, key=lambda x: x['uph'])[:5]
         
         # Build cards
         sections = []
@@ -303,17 +310,39 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
                 "widgets": [{"grid": {"title": "Stores with Highest Late Percentages", "columnCount": 2, "borderStyle": {"type": "STROKE", "cornerRadius": 4}, "items": lates_grid_items}}]
             })
         
-        # Card 2: Highest INF
-        sections.append({
-            "header": "⚠️ Highest INF Store",
-            "widgets": [{"decoratedText": {"topLabel": "Store with Highest Item Not Found Rate", "text": f"{sanitize_func(highest_inf['store'])} - {highest_inf['inf_str']}", "startIcon": {"knownIcon": "STAR"}}}]
-        })
+        # Card 2: Bottom 5 INF
+        if sorted_by_inf:
+            inf_grid_items = [
+                {"title": "Store", "textAlignment": "START"},
+                {"title": "INF %", "textAlignment": "CENTER"},
+            ]
+            for store in sorted_by_inf:
+                inf_grid_items.extend([
+                    {"title": sanitize_func(store['store']), "textAlignment": "START"},
+                    {"title": f"❌ {store['inf_str']}", "textAlignment": "CENTER"},
+                ])
+            
+            sections.append({
+                "header": "⚠️ Bottom 5 Stores: Highest INF %",
+                "widgets": [{"grid": {"title": "Stores with Highest Item Not Found Rate", "columnCount": 2, "borderStyle": {"type": "STROKE", "cornerRadius": 4}, "items": inf_grid_items}}]
+            })
         
-        # Card 3: Lowest UPH
-        sections.append({
-            "header": "⚠️ Lowest UPH Store",
-            "widgets": [{"decoratedText": {"topLabel": "Store with Lowest Units Per Hour", "text": f"{sanitize_func(lowest_uph['store'])} - {lowest_uph['uph_str']} UPH", "startIcon": {"knownIcon": "STAR"}}}]
-        })
+        # Card 3: Bottom 5 UPH
+        if sorted_by_uph:
+            uph_grid_items = [
+                {"title": "Store", "textAlignment": "START"},
+                {"title": "UPH", "textAlignment": "CENTER"},
+            ]
+            for store in sorted_by_uph:
+                uph_grid_items.extend([
+                    {"title": sanitize_func(store['store']), "textAlignment": "START"},
+                    {"title": f"❌ {store['uph_str']}", "textAlignment": "CENTER"},
+                ])
+            
+            sections.append({
+                "header": "⚠️ Bottom 5 Stores: Lowest UPH",
+                "widgets": [{"grid": {"title": "Stores with Lowest Units Per Hour", "columnCount": 2, "borderStyle": {"type": "STROKE", "cornerRadius": 4}, "items": uph_grid_items}}]
+            })
         
         # Send the card
         payload = {
