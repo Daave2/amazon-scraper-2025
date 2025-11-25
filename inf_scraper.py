@@ -45,7 +45,13 @@ ENRICH_STOCK_DATA = config.get('enrich_stock_data', True)  # Enabled by default
 MORRISONS_BEARER_TOKEN = None
 if ENRICH_STOCK_DATA and MORRISONS_BEARER_TOKEN_URL:
     from stock_enrichment import fetch_bearer_token_from_gist
+    app_logger.info(f"Fetching bearer token from: {MORRISONS_BEARER_TOKEN_URL}")
     MORRISONS_BEARER_TOKEN = fetch_bearer_token_from_gist(MORRISONS_BEARER_TOKEN_URL)
+    if MORRISONS_BEARER_TOKEN:
+        app_logger.info("Bearer token successfully loaded")
+    else:
+        app_logger.warning("Failed to fetch bearer token - stock enrichment will fail!")
+
 
 # Concurrency Config
 INITIAL_CONCURRENCY = config.get('initial_concurrency', 2) # Start lower to be safe
@@ -411,36 +417,40 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             local_playwright = await async_playwright().start()
             browser = await local_playwright.chromium.launch(headless=not DEBUG_MODE)
         
-        # Auth
-        login_needed = True
-        if ensure_storage_state(STORAGE_STATE, app_logger):
-            app_logger.info("State file found, verifying session...")
-            try:
-                # Create a temporary context to check login status
-                temp_context = await browser.new_context(storage_state=STORAGE_STATE)
-                temp_page = await temp_context.new_page()
-                
-                # Check if we are actually logged in
-                test_url = "https://sellercentral.amazon.co.uk/home"
-                if not await check_if_login_needed(temp_page, test_url, PAGE_TIMEOUT, DEBUG_MODE, app_logger):
-                    app_logger.info("Session is valid.")
-                    login_needed = False
-                else:
-                    app_logger.info("Session is invalid or expired.")
-                
-                await temp_context.close()
-            except Exception as e:
-                app_logger.error(f"Error verifying session: {e}")
-        
-        if login_needed:
-             app_logger.info("Performing login...")
-             page = await browser.new_page()
-             if not await perform_login_and_otp(page, LOGIN_URL, config, PAGE_TIMEOUT, DEBUG_MODE, app_logger, _save_screenshot):
-                 app_logger.error("Login failed.")
-                 if local_playwright: await local_playwright.stop()
-                 return
-             await page.context.storage_state(path=STORAGE_STATE)
-             await page.close()
+        # Auth - only check/login if we're managing our own browser
+        # If browser was provided by main scraper, it's already authenticated
+        if not provided_browser:
+            login_needed = True
+            if ensure_storage_state(STORAGE_STATE, app_logger):
+                app_logger.info("State file found, verifying session...")
+                try:
+                    # Create a temporary context to check login status
+                    temp_context = await browser.new_context(storage_state=STORAGE_STATE)
+                    temp_page = await temp_context.new_page()
+                    
+                    # Check if we are actually logged in
+                    test_url = "https://sellercentral.amazon.co.uk/home"
+                    if not await check_if_login_needed(temp_page, test_url, PAGE_TIMEOUT, DEBUG_MODE, app_logger):
+                        app_logger.info("Session is valid.")
+                        login_needed = False
+                    else:
+                        app_logger.info("Session is invalid or expired.")
+                    
+                    await temp_context.close()
+                except Exception as e:
+                    app_logger.error(f"Error verifying session: {e}")
+            
+            if login_needed:
+                 app_logger.info("Performing login...")
+                 page = await browser.new_page()
+                 if not await perform_login_and_otp(page, LOGIN_URL, config, PAGE_TIMEOUT, DEBUG_MODE, app_logger, _save_screenshot):
+                     app_logger.error("Login failed.")
+                     if local_playwright: await local_playwright.stop()
+                     return
+                 await page.context.storage_state(path=STORAGE_STATE)
+                 await page.close()
+        else:
+            app_logger.info("Using provided browser from main scraper (already authenticated)")
 
         # Load state
         with open(STORAGE_STATE) as f:
