@@ -365,10 +365,13 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                 details += f"📦 SKU: <font color='#1a73e8'>{sku}</font>\n"
                 details += f"⚠️ INF Units: <b>{item['inf']}</b>"
                 
-                if item.get('stock_on_hand') is not None:
-                    stock_qty = item.get('stock_on_hand', 0)
-                    stock_unit = item.get('stock_unit', '')
-                    details += f"\n📊 Stock: {stock_qty} {stock_unit}"
+                if ENRICH_STOCK_DATA:
+                    stock_qty = item.get('stock_on_hand')
+                    if stock_qty is not None:
+                        stock_unit = item.get('stock_unit', '')
+                        details += f"\n📊 Stock: {stock_qty} {stock_unit}"
+                    else:
+                        details += f"\n📊 Stock: Not Found"
                 
                 if item.get('std_location'):
                     details += f"\n📍 {item['std_location']}"
@@ -388,11 +391,6 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                 encoded_sku = urllib.parse.quote(sku)
                 qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={encoded_sku}"
                 
-                col2_widgets.append({
-                    "textParagraph": {
-                        "text": "<font color='#5f6368'><i>Scan to lookup SKU</i></font>"
-                    }
-                })
                 col2_widgets.append({
                     "image": {
                         "imageUrl": qr_url,
