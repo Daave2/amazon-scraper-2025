@@ -382,7 +382,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                 # 1. Add QR code (First)
                 import urllib.parse
                 encoded_sku = urllib.parse.quote(sku)
-                qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={encoded_sku}"
+                qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=100x100&data={encoded_sku}"
                 
                 col2_widgets.append({
                     "image": {
@@ -394,7 +394,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                 # 2. Add product image (Second)
                 if img_url:
                     # Modify URL to get higher resolution if it's an Amazon image
-                    high_res_url = img_url.replace('_SL75_', '_SL300_').replace('_AC_UL50_', '_AC_UL300_')
+                    high_res_url = img_url.replace('_SL75_', '_SL500_').replace('_AC_UL50_', '_AC_UL500_')
                     col2_widgets.append({
                         "image": {
                             "imageUrl": high_res_url,
