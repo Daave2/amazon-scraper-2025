@@ -383,20 +383,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                 # Column 2: Images (RIGHT)
                 col2_widgets = []
                 
-                # Add product image with higher resolution
-                if img_url:
-                    # Modify URL to get higher resolution if it's an Amazon image
-                    # Amazon images support size parameters like _SL500_ for 500px
-                    high_res_url = img_url.replace('_SL75_', '_SL300_').replace('_AC_UL50_', '_AC_UL300_')
-                    col2_widgets.append({
-                        "image": {
-                            "imageUrl": high_res_url,
-                            "altText": f"Product image for {sku}"
-                        }
-                    })
-                
-                # Add QR code using public API (compatible with Google Chat)
-                # Use URL encoding for the SKU
+                # 1. Add QR code (First)
                 import urllib.parse
                 encoded_sku = urllib.parse.quote(sku)
                 qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={encoded_sku}"
@@ -412,6 +399,17 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                         "altText": f"QR code for SKU {sku}"
                     }
                 })
+
+                # 2. Add product image (Second)
+                if img_url:
+                    # Modify URL to get higher resolution if it's an Amazon image
+                    high_res_url = img_url.replace('_SL75_', '_SL300_').replace('_AC_UL50_', '_AC_UL300_')
+                    col2_widgets.append({
+                        "image": {
+                            "imageUrl": high_res_url,
+                            "altText": f"Product image for {sku}"
+                        }
+                    })
                 
                 # Build the columns layout (Text LEFT, Images RIGHT)
                 columns_widget = {
