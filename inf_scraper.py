@@ -42,8 +42,7 @@ STORE_PREFIX_RE = re.compile(r"^morrisons\s*-\s*", re.I)
 
 # Morrisons API Config
 MORRISONS_API_KEY = config.get('morrisons_api_key')
-MORRISONS_BEARER_TOKEN_URL = config.get('morrisons_bearer_token_url', 
-    "https://gist.githubusercontent.com/Daave2/b62faeed0dd435100773d4de775ff52d/raw/gistfile1.txt")
+MORRISONS_BEARER_TOKEN_URL = config.get('morrisons_bearer_token_url') or "https://gist.githubusercontent.com/Daave2/b62faeed0dd435100773d4de775ff52d/raw/gistfile1.txt"
 ENRICH_STOCK_DATA = config.get('enrich_stock_data', True)  # Enabled by default
 
 # Fetch bearer token from gist at startup
@@ -396,20 +395,23 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                         }
                     })
                 
-                # Add QR code below product image
-                qr_url = generate_qr_code_data_url(sku)
-                if qr_url:
-                    col2_widgets.append({
-                        "textParagraph": {
-                            "text": "<font color='#5f6368'><i>Scan to lookup SKU</i></font>"
-                        }
-                    })
-                    col2_widgets.append({
-                        "image": {
-                            "imageUrl": qr_url,
-                            "altText": f"QR code for SKU {sku}"
-                        }
-                    })
+                # Add QR code using public API (compatible with Google Chat)
+                # Use URL encoding for the SKU
+                import urllib.parse
+                encoded_sku = urllib.parse.quote(sku)
+                qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={encoded_sku}"
+                
+                col2_widgets.append({
+                    "textParagraph": {
+                        "text": "<font color='#5f6368'><i>Scan to lookup SKU</i></font>"
+                    }
+                })
+                col2_widgets.append({
+                    "image": {
+                        "imageUrl": qr_url,
+                        "altText": f"QR code for SKU {sku}"
+                    }
+                })
                 
                 # Build the columns layout (Text LEFT, Images RIGHT)
                 columns_widget = {
