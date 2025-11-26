@@ -7,6 +7,28 @@ name: Run Playwright Scraper
 on:
   # 1. MANUAL TRIGGER: Allows you to run the scraper anytime from the "Actions" tab in GitHub.
   workflow_dispatch:
+    inputs:
+      date_mode:
+        description: 'Date range mode'
+        required: false
+        default: 'today'
+        type: choice
+        options:
+          - today
+          - yesterday
+          - week_to_date
+          - relative
+          - custom
+      relative_days:
+        description: 'Days offset for relative mode (e.g., -1 for yesterday)'
+        required: false
+        default: '0'
+      custom_start_date:
+        description: 'Start date (MM/DD/YYYY) for custom mode'
+        required: false
+      custom_end_date:
+        description: 'End date (MM/DD/YYYY) for custom mode'
+        required: false
 
   # 2. SCHEDULED RUNS:
   #    This workflow runs at the start of EVERY hour. A check job then determines
@@ -145,8 +167,33 @@ jobs:
         if_no_artifact_found: warn
         search_artifacts: true
 
-    - name: Run scraper (today mode)
-      run: python scraper.py --date-mode today
+    - name: Run scraper with date mode
+      run: |
+        # Determine date mode - use input if provided, otherwise default to 'today'
+        DATE_MODE="${{ github.event.inputs.date_mode || 'today' }}"
+        
+        # Build command based on date mode
+        if [ "$DATE_MODE" = "yesterday" ]; then
+          python scraper.py --date-mode relative --relative-days -1
+        elif [ "$DATE_MODE" = "week_to_date" ]; then
+          # Calculate Monday of current week (week starts on Monday)
+          START_DATE=$(TZ="Europe/London" date -v-mon +"%m/%d/%Y" 2>/dev/null || TZ="Europe/London" date -d "monday" +"%m/%d/%Y")
+          END_DATE=$(TZ="Europe/London" date +"%m/%d/%Y")
+          python scraper.py --date-mode custom --start-date "$START_DATE" --end-date "$END_DATE" --start-time "12:00 AM" --end-time "11:59 PM"
+        elif [ "$DATE_MODE" = "relative" ]; then
+          DAYS="${{ github.event.inputs.relative_days || '0' }}"
+          python scraper.py --date-mode relative --relative-days "$DAYS"
+        elif [ "$DATE_MODE" = "custom" ]; then
+          python scraper.py --date-mode custom \
+            --start-date "${{ github.event.inputs.custom_start_date }}" \
+            --end-date "${{ github.event.inputs.custom_end_date }}" \
+            --start-time "12:00 AM" \
+            --end-time "11:59 PM"
+        else
+          # Default: today
+          python scraper.py --date-mode today
+        fi
+
 
     - name: Upload artifacts on failure or success
       if: always()

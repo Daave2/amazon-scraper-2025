@@ -1,0 +1,137 @@
+name: Week-to-Date Report
+
+# ==============================================================================
+# ─── PURPOSE ──────────────────────────────────────────────────────────────────
+# This workflow runs to collect WEEK-TO-DATE data (Monday through today)
+# Useful for weekly performance analysis and trending
+# ==============================================================================
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+  
+  # Scheduled: Run Monday-Friday at 9 PM UK time for weekly summaries
+  # Runs at 8 PM UTC during winter, 9 PM UTC during summer
+  schedule:
+    - cron: '0 20 * * 1-5'  # 8 PM UTC Mon-Fri
+
+# Abort an older run if a new one starts
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  scrape-week-to-date:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+
+    - name: Install Python dependencies
+      run: pip install -r requirements.txt
+
+    - name: Cache Playwright browsers
+      uses: actions/cache@v4
+      id: playwright-cache
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ hashFiles('requirements.txt') }}
+
+    - name: Install Playwright browsers & deps
+      run: python -m playwright install --with-deps chromium
+
+    - name: Build runtime config from Secrets
+      env:
+        FORM_URL:        ${{ secrets.FORM_URL }}
+        LOGIN_URL:       ${{ secrets.LOGIN_URL }}
+        SECRET_KEY:      ${{ secrets.SECRET_KEY }}
+        LOGIN_EMAIL:     ${{ secrets.LOGIN_EMAIL }}
+        LOGIN_PASSWORD:  ${{ secrets.LOGIN_PASSWORD }}
+        OTP_SECRET_KEY:  ${{ secrets.OTP_SECRET_KEY }}
+        CHAT_WEBHOOK_URL: ${{ secrets.CHAT_WEBHOOK_URL }}
+        MORRISONS_API_KEY: ${{ secrets.MORRISONS_API_KEY }}
+        MORRISONS_BEARER_TOKEN_URL: ${{ secrets.MORRISONS_BEARER_TOKEN_URL }}
+      run: |
+        cat > config.json <<JSON
+        {
+          "debug": false,
+          "form_url":        "${FORM_URL}",
+          "login_url":       "${LOGIN_URL}",
+          "secret_key":      "${SECRET_KEY}",
+          "login_email":     "${LOGIN_EMAIL}",
+          "login_password":  "${LOGIN_PASSWORD}",
+          "otp_secret_key":  "${OTP_SECRET_KEY}",
+          "chat_webhook_url": "${CHAT_WEBHOOK_URL}",
+          "max_concurrency": 55,
+          "initial_concurrency": 30,
+          "num_form_submitters": 2,
+          "page_timeout_ms": 90000,
+          "element_wait_timeout_ms": 20000,
+          "auto_concurrency": { "enabled": true },
+          "use_date_range": false,
+          "morrisons_api_key": "${MORRISONS_API_KEY}",
+          "morrisons_bearer_token_url": "${MORRISONS_BEARER_TOKEN_URL}",
+          "enrich_stock_data": true
+        }
+        JSON
+
+    - name: Download auth state from previous run
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: run-scraper.yml
+        name: auth-state
+        path: .
+        if_no_artifact_found: warn
+        search_artifacts: true
+
+    - name: Calculate week-to-date range and run scraper
+      run: |
+        # Calculate Monday of current week (week starts Monday)
+        # Use GNU date if available (Linux), otherwise BSD date (macOS)
+        if date --version >/dev/null 2>&1; then
+          # GNU date (Linux)
+          START_DATE=$(TZ="Europe/London" date -d "monday" +"%m/%d/%Y")
+        else
+          # BSD date (macOS) - this shouldn't run in GitHub Actions but included for completeness
+          START_DATE=$(TZ="Europe/London" date -v-mon +"%m/%d/%Y")
+        fi
+        
+        END_DATE=$(TZ="Europe/London" date +"%m/%d/%Y")
+        
+        echo "Week-to-date range: $START_DATE to $END_DATE"
+        
+        python scraper.py --date-mode custom \
+          --start-date "$START_DATE" \
+          --end-date "$END_DATE" \
+          --start-time "12:00 AM" \
+          --end-time "11:59 PM"
+
+    - name: Upload artifacts on failure or success
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: scraper-output-week-to-date-${{ github.run_id }}
+        path: |
+          output/
+          app.log
+          state.json
+        retention-days: 7
+
+    - name: Upload auth state
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: auth-state
+        path: state.json
+        retention-days: 7
+        overwrite: true
