@@ -376,51 +376,59 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                     }
                 }]
                 
-                # Column 2: Images (RIGHT)
-                col2_widgets = []
-                
-                # 1. Add QR code (First)
+                # Prepare QR code URL
                 import urllib.parse
                 encoded_sku = urllib.parse.quote(sku)
-                qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=100x100&data={encoded_sku}"
+                qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=75x75&data={encoded_sku}"
                 
-                col2_widgets.append({
-                    "image": {
-                        "imageUrl": qr_url,
-                        "altText": f"QR code for SKU {sku}"
-                    }
-                })
-
-                # 2. Add product image (Second)
+                # Prepare high-res product image URL
+                high_res_url = img_url
                 if img_url:
-                    # Modify URL to get higher resolution if it's an Amazon image
-                    high_res_url = img_url.replace('_SL75_', '_SL500_').replace('_AC_UL50_', '_AC_UL500_')
-                    col2_widgets.append({
+                    app_logger.info(f"[DEBUG] Original image URL: {img_url}")
+                    # Use regex to replace any Amazon image size parameters with high-res version
+                    high_res_url = re.sub(r'_S[LXY]\d+_', '_SL500_', img_url)
+                    high_res_url = re.sub(r'_AC_UL\d+_', '_AC_UL500_', high_res_url)
+                    # If no size parameters found, try adding one
+                    if high_res_url == img_url and ('.jpg' in high_res_url or '.png' in high_res_url):
+                        high_res_url = re.sub(r'\.(jpg|png)', r'._SL500_.\1', high_res_url)
+                    app_logger.info(f"[DEBUG] Transformed to: {high_res_url}")
+                
+                # Build right column widgets: text details + product image
+                right_column_widgets = [
+                    {
+                        "textParagraph": {
+                            "text": details
+                        }
+                    }
+                ]
+                
+                # Add product image if available
+                if img_url:
+                    right_column_widgets.append({
                         "image": {
                             "imageUrl": high_res_url,
                             "altText": f"Product image for {sku}"
                         }
                     })
                 
-                # Build the columns layout (Text LEFT, Images RIGHT)
+                # Build columns layout: QR (left, compact) | Details + Image (right, fill)
                 columns_widget = {
                     "columns": {
                         "columnItems": [
                             {
-                                "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
-                                "horizontalAlignment": "START",
-                                "verticalAlignment": "TOP",
-                                "widgets": col1_widgets
+                                "horizontalSizeStyle": "FILL_MINIMUM_SPACE",
+                                "horizontalAlignment": "CENTER",
+                                "verticalAlignment": "CENTER",
+                                "widgets": [{"image": {"imageUrl": qr_url, "altText": f"QR code for SKU {sku}"}}]
                             },
                             {
-                                "horizontalSizeStyle": "FILL_MINIMUM_SPACE",
-                                "horizontalAlignment": "END",
-                                "verticalAlignment": "TOP",
-                                "widgets": col2_widgets
+                                "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
+                                "widgets": right_column_widgets
                             }
                         ]
                     }
                 }
+                
                 widgets_store.append(columns_widget)
                 widgets_store.append({"divider": {}})
 
