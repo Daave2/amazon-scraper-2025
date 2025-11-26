@@ -143,14 +143,19 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
         # Wait for inputs to be ready
         await expect(date_inputs.first).to_be_visible(timeout=5000)
         
-        # Click and fill date fields
-        await date_inputs.nth(0).click()
-        await date_inputs.nth(0).fill(date_range['start_date'])
-        await date_inputs.nth(0).press('Enter')
-        
-        await date_inputs.nth(1).click()
-        await date_inputs.nth(1).fill(date_range['end_date'])
-        await date_inputs.nth(1).press('Enter')
+        # Helper to robustly fill an input
+        async def fill_date_input(locator, value):
+            await locator.click()
+            await locator.clear()
+            # Type slowly to ensure events fire
+            await locator.type(value, delay=50)
+            await locator.press('Enter')
+            # Force update via JS just in case
+            await locator.evaluate("(el, val) => { el.value = val; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); }", value)
+
+        # Fill date fields
+        await fill_date_input(date_inputs.nth(0), date_range['start_date'])
+        await fill_date_input(date_inputs.nth(1), date_range['end_date'])
         
         # Trigger change events/blur to ensure UI updates
         await date_inputs.nth(1).blur()
@@ -250,6 +255,43 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
                     time_filled = True
                 except Exception as e:
                     app_logger.debug(f"[{store_name}] Explicit time input strategy failed: {e}")
+
+        # Strategy 6: JS Injection (Nuclear Option)
+        if not time_filled:
+            # Try to find inputs by value or placeholder and set them via JS
+            # This handles cases where inputs are hidden or have obscure selectors
+            try:
+                js_success = await page.evaluate("""({start, end}) => {
+                    const inputs = Array.from(document.querySelectorAll('input, select'));
+                    
+                    // Helper to check if element is time-related
+                    const isTimeInput = (el) => {
+                        const str = (el.className + ' ' + el.placeholder + ' ' + el.ariaLabel + ' ' + el.name).toLowerCase();
+                        return el.type === 'time' || str.includes('time') || str.includes('hour') || str.includes('minute');
+                    };
+                    
+                    const timeInputs = inputs.filter(isTimeInput);
+                    
+                    if (timeInputs.length >= 2) {
+                        // Set start time
+                        timeInputs[0].value = start;
+                        timeInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+                        timeInputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+                        
+                        // Set end time
+                        timeInputs[1].value = end;
+                        timeInputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+                        timeInputs[1].dispatchEvent(new Event('change', { bubbles: true }));
+                        return true;
+                    }
+                    return false;
+                }""", {'start': date_range['start_time'], 'end': date_range['end_time']})
+                
+                if js_success:
+                    app_logger.info(f"[{store_name}] ✓ Filled time fields via JS injection")
+                    time_filled = True
+            except Exception as e:
+                app_logger.debug(f"[{store_name}] JS injection strategy failed: {e}")
 
         if not time_filled:
             # No time selectors found
