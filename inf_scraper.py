@@ -327,15 +327,8 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
             return
     
     # Message 2+: All Stores (sorted by INF rate, highest first)
-    # Sort by INF rate (descending - highest first)
-    def parse_inf_rate(store_tuple):
-        inf_rate_str = store_tuple[3]  # inf_rate is 4th element
-        try:
-            return float(inf_rate_str.replace('%', '').strip()) if inf_rate_str != 'N/A' else -1.0
-        except:
-            return -1.0
-    
-    sorted_store_data = sorted(store_data, key=parse_inf_rate, reverse=True)
+    # Sort alphabetically by store name as requested
+    sorted_store_data = sorted(store_data, key=lambda x: x[0])
     stores_with_data = [(name, num, items, inf_rate) for name, num, items, inf_rate in sorted_store_data if items]
     
     # Batch size set to 10 as images take more space/payload
@@ -352,7 +345,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
             
             # Header with INF Rate
             inf_display = f"INF: {inf_rate}" if inf_rate != 'N/A' else f"Total INF: {total_inf}"
-            section_header = f"#{store_number} {clean_store_name} | {inf_display}"
+            section_header = f"{clean_store_name} | {inf_display}"
             
             # Show top 5 items with card layout
             for item in items[:5]:

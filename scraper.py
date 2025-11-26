@@ -54,6 +54,8 @@ parser.add_argument('--end-date', help='End date (MM/DD/YYYY)')
 parser.add_argument('--start-time', help='Start time (e.g., "12:00 AM")')
 parser.add_argument('--end-time', help='End time (e.g., "11:59 PM")')
 parser.add_argument('--relative-days', type=int, help='Days offset for relative mode')
+parser.add_argument('--inf-mode', choices=['top10', 'all'], default='top10', help='INF analysis mode: top10 worst stores or all stores')
+parser.add_argument('--inf-only', action='store_true', help='Run ONLY INF analysis for all stores, skipping dashboard metrics')
 
 args, unknown = parser.parse_known_args()
 
@@ -239,6 +241,17 @@ async def process_urls():
             app_logger.critical(f"Critical: Session priming failed after {MAX_LOGIN_ATTEMPTS} attempts. Aborting job.")
             return
 
+    if args.inf_only:
+        app_logger.info("INF ONLY mode enabled. Skipping dashboard scraping.")
+        # Load all stores
+        all_stores = []
+        load_default_data(all_stores, app_logger)
+        if all_stores:
+             await run_inf_analysis(all_stores, browser)
+        else:
+             app_logger.error("No stores found for INF analysis.")
+        return
+
     with open(STORAGE_STATE) as f: storage_template = json.load(f)
     
     # Queues
@@ -365,11 +378,16 @@ async def process_urls():
                 # Sort by INF descending (Higher INF is worse)
                 sorted_by_inf = sorted(valid_stores, key=parse_inf, reverse=True)
                 
-                # Take top 10
-                bottom_10_inf = sorted_by_inf[:10]
+                # Take top 10 or all based on mode
+                if args.inf_mode == 'all':
+                    target_stores_inf_list = sorted_by_inf
+                    app_logger.info(f"INF Mode: ALL. Targeting {len(target_stores_inf_list)} stores.")
+                else:
+                    target_stores_inf_list = sorted_by_inf[:10]
+                    app_logger.info(f"INF Mode: Top 10. Targeting {len(target_stores_inf_list)} stores.")
                 
                 target_stores_for_inf = []
-                for s in bottom_10_inf:
+                for s in target_stores_inf_list:
                     full_details = store_lookup.get(s['store'])
                     if full_details:
                         # Create a copy to avoid modifying the original urls_data
