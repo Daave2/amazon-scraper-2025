@@ -9,3 +9,4 @@ aiofiles
 pytest
 pytest-asyncio
 requests
+qrcode[pil]

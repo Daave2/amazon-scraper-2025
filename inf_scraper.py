@@ -5,10 +5,13 @@ import asyncio
 import re
 import os
 import csv
+import base64
+import io
 from datetime import datetime
 from typing import List, Dict
 from asyncio import Queue, Lock, Condition
 from playwright.async_api import async_playwright, Page, TimeoutError, expect, Browser
+import qrcode
 
 # Import modules
 from utils import setup_logging, sanitize_store_name, _save_screenshot, load_default_data, ensure_storage_state, LOCAL_TIMEZONE
@@ -225,6 +228,32 @@ async def worker(worker_id: int, browser: Browser, storage_state: Dict, job_queu
                 pass
         app_logger.info(f"[Worker-{worker_id}] Finished.")
 
+def generate_qr_code_data_url(sku: str) -> str:
+    """Generate a QR code as a data URL for embedding in Google Chat."""
+    try:
+        # Generate QR code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=2,
+        )
+        qr.add_data(sku)
+        qr.make(fit=True)
+        
+        # Create an image
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to base64 data URL
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+        return f"data:image/png;base64,{img_str}"
+    except Exception as e:
+        app_logger.warning(f"Failed to generate QR code for SKU {sku}: {e}")
+        return ""
+
+
 async def send_inf_report(store_data, network_top_10, skip_network_report=False):
     """Send INF report to Google Chat
     
@@ -316,33 +345,72 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
             for item in items[:5]:
                 # Build Columns Widget
                 img_url = item.get('image_url', '')
+                sku = item['sku']
                 
-                # Text Details
-                details = f"<b>{item['name']}</b>\nSKU: {item['sku']}\nINF Units: {item['inf']}"
+                # Text Details (Left Column)
+                details = f"<b>{item['name']}</b>\n\n"
+                details += f"📦 SKU: <font color='#1a73e8'>{sku}</font>\n"
+                details += f"⚠️ INF Units: <b>{item['inf']}</b>"
+                
                 if item.get('stock_on_hand') is not None:
                     stock_qty = item.get('stock_on_hand', 0)
                     stock_unit = item.get('stock_unit', '')
-                    details += f" | Stock: {stock_qty} {stock_unit}"
+                    details += f"\n📊 Stock: {stock_qty} {stock_unit}"
                 
-                # Column 1: Image (if available)
-                col1_widgets = []
+                if item.get('std_location'):
+                    details += f"\n📍 {item['std_location']}"
+                
+                # Column 1: Text Details (LEFT)
+                col1_widgets = [{
+                    "textParagraph": {
+                        "text": details
+                    }
+                }]
+                
+                # Column 2: Images (RIGHT)
+                col2_widgets = []
+                
+                # Add product image with higher resolution
                 if img_url:
-                    col1_widgets.append({"image": {"imageUrl": img_url}})
+                    # Modify URL to get higher resolution if it's an Amazon image
+                    # Amazon images support size parameters like _SL500_ for 500px
+                    high_res_url = img_url.replace('_SL75_', '_SL300_').replace('_AC_UL50_', '_AC_UL300_')
+                    col2_widgets.append({
+                        "image": {
+                            "imageUrl": high_res_url,
+                            "altText": f"Product image for {sku}"
+                        }
+                    })
                 
-                # Column 2: Text
-                col2_widgets = [{"textParagraph": {"text": details}}]
+                # Add QR code below product image
+                qr_url = generate_qr_code_data_url(sku)
+                if qr_url:
+                    col2_widgets.append({
+                        "textParagraph": {
+                            "text": "<font color='#5f6368'><i>Scan to lookup SKU</i></font>"
+                        }
+                    })
+                    col2_widgets.append({
+                        "image": {
+                            "imageUrl": qr_url,
+                            "altText": f"QR code for SKU {sku}"
+                        }
+                    })
                 
+                # Build the columns layout (Text LEFT, Images RIGHT)
                 columns_widget = {
                     "columns": {
                         "columnItems": [
                             {
                                 "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
-                                "horizontalAlignment": "CENTER",
+                                "horizontalAlignment": "START",
+                                "verticalAlignment": "TOP",
                                 "widgets": col1_widgets
                             },
                             {
-                                "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
-                                "horizontalAlignment": "START",
+                                "horizontalSizeStyle": "FILL_MINIMUM_SPACE",
+                                "horizontalAlignment": "END",
+                                "verticalAlignment": "TOP",
                                 "widgets": col2_widgets
                             }
                         ]
@@ -350,6 +418,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                 }
                 widgets_store.append(columns_widget)
                 widgets_store.append({"divider": {}})
+
             
             # Add collapsible section
             sections_stores.append({
