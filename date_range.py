@@ -146,12 +146,15 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
         # Click and fill date fields
         await date_inputs.nth(0).click()
         await date_inputs.nth(0).fill(date_range['start_date'])
+        await date_inputs.nth(0).press('Enter')
+        
         await date_inputs.nth(1).click()
         await date_inputs.nth(1).fill(date_range['end_date'])
+        await date_inputs.nth(1).press('Enter')
         
         # Trigger change events/blur to ensure UI updates
         await date_inputs.nth(1).blur()
-        await page.wait_for_timeout(1000) # Wait for UI to react (e.g. show time fields)
+        await page.wait_for_timeout(1000) # Wait for UI to react
         
         app_logger.info(f"[{store_name}] Filled date fields: {date_range['start_date']} to {date_range['end_date']}")
         
