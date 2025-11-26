@@ -251,20 +251,32 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
         if not time_filled:
             # No time selectors found
             app_logger.info(f"[{store_name}] Time selectors not found (date-only view), proceeding with dates only")
-            app_logger.info(f"[{store_name}] ⚠ WARNING: Without time selection, data may be incomplete (not full 24 hours)")
         
         
-        # Step 4: Click "Apply" and wait for metrics response
+        # Step 4: Click "Apply" or "Submit" and wait for metrics response
+        # Main dashboard uses "Apply", INF page uses "Submit"
         apply_btn = page.get_by_role("button", name="Apply")
-        async with page.expect_response(
-            lambda r: ("summationMetrics" in r.url or "/api/metrics" in r.url) and r.status == 200,
-            timeout=30000
-        ) as apply_info:
-            await apply_btn.click(timeout=action_timeout)
-        
-        apply_response = await apply_info.value
-        app_logger.info(f"[{store_name}] Date/time range applied successfully, received metrics response")
-        return True
+        if await apply_btn.count() == 0:
+            app_logger.debug(f"[{store_name}] 'Apply' button not found, looking for 'Submit'")
+            apply_btn = page.get_by_role("button", name="Submit")
+            
+        if await apply_btn.count() > 0:
+            # Use a broader response filter since INF page might use different endpoints
+            async with page.expect_response(
+                lambda r: r.status == 200 and ("metrics" in r.url or "inventory" in r.url or "submit" in r.url),
+                timeout=30000
+            ) as apply_info:
+                await apply_btn.click(timeout=action_timeout)
+            
+            try:
+                await apply_info.value
+                app_logger.info(f"[{store_name}] Date/time range applied successfully (clicked button)")
+            except Exception:
+                app_logger.warning(f"[{store_name}] Clicked apply/submit, but didn't catch expected network response (might still have worked)")
+            return True
+        else:
+            app_logger.warning(f"[{store_name}] Could not find 'Apply' or 'Submit' button to confirm date range")
+            return False
         
     except AssertionError as e:
         app_logger.warning(f"[{store_name}] Could not apply date range (UI element not found): {e}")
