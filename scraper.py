@@ -78,6 +78,8 @@ if (args.start_date or args.end_date) and not args.date_mode:
 DEBUG_MODE      = config.get('debug', False)
 LOGIN_URL       = config['login_url']
 CHAT_WEBHOOK_URL = config.get('chat_webhook_url')
+STORE_WEBHOOK_URL = config.get('store_webhook_url') or CHAT_WEBHOOK_URL
+PERFORMANCE_WEBHOOK_URL = config.get('performance_webhook_url') or CHAT_WEBHOOK_URL
 CHAT_BATCH_SIZE  = config.get('chat_batch_size', 100)
 STORE_PREFIX_RE  = re.compile(r"^morrisons\s*-\s*", re.I)
 
@@ -277,12 +279,12 @@ async def process_urls():
     async def post_webhook_wrapper(entries):
         global chat_batch_count
         chat_batch_count += 1
-        await post_to_chat_webhook(entries, CHAT_WEBHOOK_URL, chat_batch_count, get_date_range,
+        await post_to_chat_webhook(entries, STORE_WEBHOOK_URL, chat_batch_count, get_date_range,
                                    sanitize_wrapper, UPH_THRESHOLD, LATES_THRESHOLD, INF_THRESHOLD,
                                    EMOJI_GREEN_CHECK, EMOJI_RED_CROSS, LOCAL_TIMEZONE, DEBUG_MODE, app_logger)
     
     async def add_chat_wrapper(entry):
-        await add_to_pending_chat(entry, CHAT_WEBHOOK_URL, pending_chat_lock, pending_chat_entries,
+        await add_to_pending_chat(entry, STORE_WEBHOOK_URL, pending_chat_lock, pending_chat_entries,
                                   CHAT_BATCH_SIZE, post_webhook_wrapper)
     
     async def log_submission_wrapper(data):
@@ -336,7 +338,7 @@ async def process_urls():
     await submission_queue.join()
     
     async def flush_wrapper():
-        await flush_pending_chat_entries(CHAT_WEBHOOK_URL, pending_chat_lock, pending_chat_entries, post_webhook_wrapper)
+        await flush_pending_chat_entries(STORE_WEBHOOK_URL, pending_chat_lock, pending_chat_entries, post_webhook_wrapper)
     
     await flush_wrapper()
     
@@ -349,13 +351,13 @@ async def process_urls():
     
     # Send Job Summary
     await post_job_summary(progress['total'], progress['current'], run_failures, elapsed,
-                          CHAT_WEBHOOK_URL, metrics_lock, metrics, LOCAL_TIMEZONE, DEBUG_MODE, app_logger)
+                          PERFORMANCE_WEBHOOK_URL, metrics_lock, metrics, LOCAL_TIMEZONE, DEBUG_MODE, app_logger)
     
     # Send Performance Highlights & Trigger INF Deep Dive
     async with submitted_data_lock:
         if submitted_store_data:
             # 1. Send Performance Highlights
-            await post_performance_highlights(submitted_store_data, CHAT_WEBHOOK_URL, sanitize_wrapper,
+            await post_performance_highlights(submitted_store_data, PERFORMANCE_WEBHOOK_URL, sanitize_wrapper,
                                              LOCAL_TIMEZONE, DEBUG_MODE, app_logger)
             
             # 2. Identify Bottom 5 INF Stores for Deep Dive

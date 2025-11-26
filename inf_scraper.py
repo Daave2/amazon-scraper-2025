@@ -34,7 +34,7 @@ except FileNotFoundError:
 
 DEBUG_MODE = config.get('debug', False)
 LOGIN_URL = config['login_url']
-CHAT_WEBHOOK_URL = config.get('chat_webhook_url')
+CHAT_WEBHOOK_URL = config.get('inf_webhook_url') or config.get('chat_webhook_url')
 STORAGE_STATE = 'state.json'
 OUTPUT_DIR = 'output'
 PAGE_TIMEOUT = config.get('page_timeout_ms', 30000)
@@ -448,25 +448,47 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
             }]
         }
         
-        # Send this batch
-        try:
-            # Create fresh connector for each batch
-            batch_ssl_context = ssl.create_default_context(cafile=certifi.where())
-            batch_connector = aiohttp.TCPConnector(ssl=batch_ssl_context)
-            
-            async with aiohttp.ClientSession(timeout=timeout, connector=batch_connector) as session:
-                async with session.post(CHAT_WEBHOOK_URL, json=payload_stores) as resp:
-                    if resp.status != 200:
-                        app_logger.error(f"Failed to send store batch {batch_num}: {await resp.text()}")
-                    else:
-                        app_logger.info(f"Store batch {batch_num}/{len(batches)} sent successfully.")
-            
-            # Small delay between messages to avoid rate limiting
-            if batch_num < len(batches):
-                await asyncio.sleep(0.5)
+        # Send this batch with retry logic for rate limits
+        max_retries = 3
+        retry_delay = 2.0  # Start with 2 seconds
+        
+        for attempt in range(max_retries):
+            try:
+                # Create fresh connector for each batch
+                batch_ssl_context = ssl.create_default_context(cafile=certifi.where())
+                batch_connector = aiohttp.TCPConnector(ssl=batch_ssl_context)
                 
-        except Exception as e:
-            app_logger.error(f"Error sending store batch {batch_num}: {e}")
+                async with aiohttp.ClientSession(timeout=timeout, connector=batch_connector) as session:
+                    async with session.post(CHAT_WEBHOOK_URL, json=payload_stores) as resp:
+                        if resp.status == 429:
+                            # Rate limit hit - retry with exponential backoff
+                            if attempt < max_retries - 1:
+                                wait_time = retry_delay * (2 ** attempt)
+                                app_logger.warning(f"Rate limit hit for batch {batch_num}. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}...")
+                                await asyncio.sleep(wait_time)
+                                continue
+                            else:
+                                app_logger.error(f"Failed to send store batch {batch_num} after {max_retries} attempts: {await resp.text()}")
+                                break
+                        elif resp.status != 200:
+                            app_logger.error(f"Failed to send store batch {batch_num}: {await resp.text()}")
+                            break
+                        else:
+                            app_logger.info(f"Store batch {batch_num}/{len(batches)} sent successfully.")
+                            break
+                
+                # Delay between batches to avoid rate limiting (1.5s is safer than 0.5s)
+                if batch_num < len(batches):
+                    await asyncio.sleep(1.5)
+                    
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)
+                    app_logger.warning(f"Error sending store batch {batch_num} (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    app_logger.error(f"Error sending store batch {batch_num} after {max_retries} attempts: {e}")
+
 
 async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: Browser = None):
     app_logger.info("Starting INF Analysis...")
