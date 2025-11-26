@@ -69,9 +69,9 @@ def get_date_time_range_from_config(config: dict, local_timezone, app_logger) ->
     now = datetime.now(local_timezone)
     
     if mode == 'today':
-        start_date = end_date = now.strftime("%m/%d/%Y")
-        start_time = config.get('start_time', '12:00 AM')
-        end_time = config.get('end_time', '11:59 PM')
+        # User requested 'today', which is the default view.
+        # Return None to skip date picker interaction.
+        return None
     
     elif mode == 'relative':
         days_offset = config.get('relative_days', 0)
