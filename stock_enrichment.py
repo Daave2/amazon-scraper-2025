@@ -21,13 +21,14 @@ _SIDE_RE = re.compile(r"^([LR])(\d+)$", re.I)
 def fetch_bearer_token_from_gist(gist_url: str) -> str | None:
     """Fetch the bearer token from a GitHub gist URL."""
     try:
+        app_logger.info(f"Fetching bearer token from: {gist_url}")
         response = requests.get(gist_url, timeout=10)
         response.raise_for_status()
         token = response.text.strip()
-        app_logger.info("Successfully fetched bearer token from gist")
+        app_logger.info(f"Successfully fetched bearer token from gist (length: {len(token)})")
         return token
     except Exception as e:
-        app_logger.warning(f"Failed to fetch bearer token from gist: {e}")
+        app_logger.error(f"Failed to fetch bearer token from gist {gist_url}: {e}")
         return None
 
 
@@ -40,18 +41,17 @@ def _http_get(url: str, bearer: str | None) -> requests.Response:
 
 
 def _fetch_json(url: str, bearer: str | None) -> Dict[str, Any] | None:
-    """Fetches and parses JSON from a URL, with a retry for auth failure."""
+    """Fetches and parses JSON from a URL."""
     try:
         r = _http_get(url, bearer)
-        if r.status_code in (401, 403) and bearer:
-            app_logger.debug(f"Bearer token failed for {url}; retrying without it.")
-            r = _http_get(url, None)
         r.raise_for_status()
         return r.json()
     except requests.HTTPError as e:
         if e.response and e.response.status_code == 404:
             return None  # Return None for 404s to distinguish from other errors
-        app_logger.warning(f"HTTP error for {url}: {e}")
+        # Log auth status for debugging
+        auth_status = "WITH bearer token" if bearer else "WITHOUT bearer token"
+        app_logger.warning(f"HTTP error for {url} ({auth_status}): {e}")
         return None
     except Exception as e:
         app_logger.warning(f"Error fetching {url}: {e}")
