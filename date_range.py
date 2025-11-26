@@ -150,10 +150,18 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
         # Time dropdowns - try multiple selector strategies
         time_filled = False
         
+        # First, let's see what's actually in the date picker
+        app_logger.debug(f"[{store_name}] === Debugging date picker contents ===")
+        all_selects = await page.locator('select').count()
+        all_dropdowns = await page.locator('kat-dropdown').count()
+        all_buttons = await date_picker.locator('button').count()
+        app_logger.debug(f"[{store_name}] Page-wide: {all_selects} select elements, {all_dropdowns} kat-dropdown elements")
+        app_logger.debug(f"[{store_name}] In date picker: {all_buttons} button elements")
+        
         # Strategy 1: Look for select elements
         time_selects = date_picker.locator('select')
         select_count = await time_selects.count()
-        app_logger.debug(f"[{store_name}] Found {select_count} select elements")
+        app_logger.debug(f"[{store_name}] Found {select_count} select elements in date picker")
         
         if select_count >= 2:
             try:
@@ -161,7 +169,7 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
                 await time_selects.nth(0).select_option(label=date_range['start_time'])
                 # Fill end time  
                 await time_selects.nth(1).select_option(label=date_range['end_time'])
-                app_logger.info(f"[{store_name}] Filled time fields via select: {date_range['start_time']} to {date_range['end_time']}")
+                app_logger.info(f"[{store_name}] ✓ Filled time fields via select: {date_range['start_time']} to {date_range['end_time']}")
                 time_filled = True
             except Exception as e:
                 app_logger.debug(f"[{store_name}] Select option strategy failed: {e}")
@@ -170,7 +178,7 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
         if not time_filled:
             time_dropdowns = date_picker.locator('kat-dropdown')
             dropdown_count = await time_dropdowns.count()
-            app_logger.debug(f"[{store_name}] Found {dropdown_count} kat-dropdown elements")
+            app_logger.debug(f"[{store_name}] Found {dropdown_count} kat-dropdown elements in date picker")
             
             if dropdown_count >= 2:
                 try:
@@ -183,23 +191,43 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
                     await time_dropdowns.nth(1).click()
                     await page.wait_for_timeout(500)
                     await page.get_by_text(date_range['end_time'], exact=True).click()
-                    app_logger.info(f"[{store_name}] Filled time fields via dropdown: {date_range['start_time']} to {date_range['end_time']}")
+                    app_logger.info(f"[{store_name}] ✓ Filled time fields via dropdown: {date_range['start_time']} to {date_range['end_time']}")
                     time_filled = True
                 except Exception as e:
                     app_logger.debug(f"[{store_name}] Dropdown click strategy failed: {e}")
         
-        # Strategy 3: Look for any time input/button elements
+        # Strategy 3: Look for any time-related buttons or inputs
         if not time_filled:
-            time_inputs = date_picker.locator('[placeholder*="time" i], [aria-label*="time" i], button:has-text("AM"), button:has-text("PM")')
-            input_count = await time_inputs.count()
-            app_logger.debug(f"[{store_name}] Found {input_count} potential time input elements")
+            # Check for various time-related elements
+            time_buttons = await date_picker.locator('button:has-text("AM"), button:has-text("PM"), button:has-text(":")').count()
+            time_labels = await date_picker.locator('[aria-label*="time" i], [placeholder*="time" i]').count()
             
-            if input_count > 0:
-                app_logger.warning(f"[{store_name}] Time inputs detected but auto-fill strategies failed - may need manual selector update")
+            app_logger.debug(f"[{store_name}] Found {time_buttons} time buttons, {time_labels} time labels/placeholders")
+            
+            if time_buttons > 0 or time_labels > 0:
+                app_logger.warning(f"[{store_name}] ⚠ Time inputs detected ({time_buttons} buttons, {time_labels} labels) but could not auto-fill")
         
+        # Strategy 4: Check if there are extra text inputs (indices 2 and 3)
         if not time_filled:
-            # No time selectors found - this is OK for date-only views
+            # We already defined date_inputs earlier: date_picker.locator('input[type="text"]')
+            text_input_count = await date_inputs.count()
+            app_logger.debug(f"[{store_name}] Total text inputs found: {text_input_count}")
+            
+            if text_input_count >= 4:
+                try:
+                    # Assume 0,1 are dates (already filled) and 2,3 are times
+                    app_logger.info(f"[{store_name}] Found 4+ text inputs, attempting to fill indices 2 and 3 as times")
+                    await date_inputs.nth(2).fill(date_range['start_time'])
+                    await date_inputs.nth(3).fill(date_range['end_time'])
+                    app_logger.info(f"[{store_name}] ✓ Filled time fields via text inputs: {date_range['start_time']} to {date_range['end_time']}")
+                    time_filled = True
+                except Exception as e:
+                    app_logger.debug(f"[{store_name}] Text input strategy failed: {e}")
+
+        if not time_filled:
+            # No time selectors found
             app_logger.info(f"[{store_name}] Time selectors not found (date-only view), proceeding with dates only")
+            app_logger.info(f"[{store_name}] ⚠ WARNING: Without time selection, data may be incomplete (not full 24 hours)")
         
         
         # Step 4: Click "Apply" and wait for metrics response
