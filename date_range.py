@@ -147,19 +147,60 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
         await date_inputs.nth(1).fill(date_range['end_date'])
         app_logger.info(f"[{store_name}] Filled date fields: {date_range['start_date']} to {date_range['end_date']}")
         
-        # Time dropdowns - look for select elements or kat-dropdown
-        time_selects = date_picker.locator('select, kat-dropdown')
-        if await time_selects.count() >= 2:
-            # Fill start time
-            await time_selects.nth(0).click()
-            await page.get_by_text(date_range['start_time'], exact=True).click()
-            # Fill end time
-            await time_selects.nth(1).click()
-            await page.get_by_text(date_range['end_time'], exact=True).click()
-            app_logger.info(f"[{store_name}] Filled time fields: {date_range['start_time']} to {date_range['end_time']}")
-        else:
-            # This is common for some views (e.g. Shopper Performance) which only allow date selection
-            app_logger.info(f"[{store_name}] Time selectors not found (likely date-only view), proceeding with dates only")
+        # Time dropdowns - try multiple selector strategies
+        time_filled = False
+        
+        # Strategy 1: Look for select elements
+        time_selects = date_picker.locator('select')
+        select_count = await time_selects.count()
+        app_logger.debug(f"[{store_name}] Found {select_count} select elements")
+        
+        if select_count >= 2:
+            try:
+                # Fill start time
+                await time_selects.nth(0).select_option(label=date_range['start_time'])
+                # Fill end time  
+                await time_selects.nth(1).select_option(label=date_range['end_time'])
+                app_logger.info(f"[{store_name}] Filled time fields via select: {date_range['start_time']} to {date_range['end_time']}")
+                time_filled = True
+            except Exception as e:
+                app_logger.debug(f"[{store_name}] Select option strategy failed: {e}")
+        
+        # Strategy 2: Look for kat-dropdown elements (clickable dropdowns)
+        if not time_filled:
+            time_dropdowns = date_picker.locator('kat-dropdown')
+            dropdown_count = await time_dropdowns.count()
+            app_logger.debug(f"[{store_name}] Found {dropdown_count} kat-dropdown elements")
+            
+            if dropdown_count >= 2:
+                try:
+                    # Fill start time
+                    await time_dropdowns.nth(0).click()
+                    await page.wait_for_timeout(500)
+                    await page.get_by_text(date_range['start_time'], exact=True).click()
+                    await page.wait_for_timeout(500)
+                    # Fill end time
+                    await time_dropdowns.nth(1).click()
+                    await page.wait_for_timeout(500)
+                    await page.get_by_text(date_range['end_time'], exact=True).click()
+                    app_logger.info(f"[{store_name}] Filled time fields via dropdown: {date_range['start_time']} to {date_range['end_time']}")
+                    time_filled = True
+                except Exception as e:
+                    app_logger.debug(f"[{store_name}] Dropdown click strategy failed: {e}")
+        
+        # Strategy 3: Look for any time input/button elements
+        if not time_filled:
+            time_inputs = date_picker.locator('[placeholder*="time" i], [aria-label*="time" i], button:has-text("AM"), button:has-text("PM")')
+            input_count = await time_inputs.count()
+            app_logger.debug(f"[{store_name}] Found {input_count} potential time input elements")
+            
+            if input_count > 0:
+                app_logger.warning(f"[{store_name}] Time inputs detected but auto-fill strategies failed - may need manual selector update")
+        
+        if not time_filled:
+            # No time selectors found - this is OK for date-only views
+            app_logger.info(f"[{store_name}] Time selectors not found (date-only view), proceeding with dates only")
+        
         
         # Step 4: Click "Apply" and wait for metrics response
         apply_btn = page.get_by_role("button", name="Apply")

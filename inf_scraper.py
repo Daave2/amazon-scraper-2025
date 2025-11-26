@@ -18,6 +18,7 @@ from utils import setup_logging, sanitize_store_name, _save_screenshot, load_def
 from auth import check_if_login_needed, perform_login_and_otp, prime_master_session
 from workers import auto_concurrency_manager
 from stock_enrichment import enrich_items_with_stock_data
+from date_range import get_date_time_range_from_config, apply_date_time_range
 
 # Setup logging
 app_logger = setup_logging()
@@ -134,7 +135,7 @@ async def navigate_and_extract_inf(page: Page, store_name: str):
         await _save_screenshot(page, f"error_inf_{sanitize_store_name(store_name, STORE_PREFIX_RE)}", OUTPUT_DIR, LOCAL_TIMEZONE, app_logger)
         return []
 
-async def process_store_task(context, store_info, results_list, results_lock, failure_lock, failure_timestamps):
+async def process_store_task(context, store_info, results_list, results_lock, failure_lock, failure_timestamps, date_range_func=None, action_timeout=20000):
     merchant_id = store_info['merchant_id']
     marketplace_id = store_info['marketplace_id']
     store_name = store_info['store_name']
@@ -154,6 +155,16 @@ async def process_store_task(context, store_info, results_list, results_lock, fa
         )
         
         await page.goto(inf_url, timeout=PAGE_TIMEOUT, wait_until="domcontentloaded")
+        
+        # Apply date range if configured (same as main scraper)
+        if date_range_func:
+            date_range_applied = await apply_date_time_range(
+                page, store_name, date_range_func, action_timeout, DEBUG_MODE, app_logger
+            )
+            if date_range_applied:
+                app_logger.info(f"[{store_name}] Date range applied to INF page")
+            else:
+                app_logger.warning(f"[{store_name}] Could not apply date range to INF page, using default")
         
         # Now extract INF data
         items = await navigate_and_extract_inf(page, store_name)
@@ -188,7 +199,7 @@ async def process_store_task(context, store_info, results_list, results_lock, fa
 async def worker(worker_id: int, browser: Browser, storage_state: Dict, job_queue: Queue, 
                  results_list: List, results_lock: Lock,
                  concurrency_limit_ref: dict, active_workers_ref: dict, concurrency_condition: Condition,
-                 failure_lock: Lock, failure_timestamps: List):
+                 failure_lock: Lock, failure_timestamps: List, date_range_func=None, action_timeout=20000):
     
     app_logger.info(f"[Worker-{worker_id}] Starting...")
     context = None
@@ -210,7 +221,7 @@ async def worker(worker_id: int, browser: Browser, storage_state: Dict, job_queu
                 active_workers_ref['value'] += 1
             
             try:
-                await process_store_task(context, store_info, results_list, results_lock, failure_lock, failure_timestamps)
+                await process_store_task(context, store_info, results_list, results_lock, failure_lock, failure_timestamps, date_range_func, action_timeout)
             except Exception as e:
                 app_logger.error(f"[Worker-{worker_id}] Error processing store: {e}")
             finally:
@@ -524,6 +535,13 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         # Load state
         with open(STORAGE_STATE) as f:
             storage_state = json.load(f)
+        
+        # Create date range function (same as main scraper)
+        def get_date_range():
+            return get_date_time_range_from_config(config, LOCAL_TIMEZONE, app_logger)
+        
+        # Determine ACTION_TIMEOUT
+        ACTION_TIMEOUT = int(PAGE_TIMEOUT / 2)
             
         # Setup Queue
         job_queue = Queue()
@@ -558,7 +576,7 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         workers = [
             asyncio.create_task(worker(i+1, browser, storage_state, job_queue, results_list, results_lock,
                                        concurrency_limit_ref, active_workers_ref, concurrency_condition,
-                                       failure_lock, failure_timestamps))
+                                       failure_lock, failure_timestamps, get_date_range, ACTION_TIMEOUT))
             for i in range(num_workers)
         ]
         

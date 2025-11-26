@@ -94,7 +94,8 @@ jobs:
         search_artifacts: true
 
     - name: Run scraper (yesterday's data)
-      run: python scraper.py --date-mode relative --relative-days -1
+      run: python scraper.py --date-mode relative --relative-days -1 --start-time "12:00 AM" --end-time "11:59 PM"
+
 
     - name: Upload artifacts on failure or success
       if: always()

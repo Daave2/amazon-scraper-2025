@@ -174,23 +174,32 @@ jobs:
         
         # Build command based on date mode
         if [ "$DATE_MODE" = "yesterday" ]; then
-          python scraper.py --date-mode relative --relative-days -1
+          # Yesterday: full 24 hours (12:00 AM to 11:59 PM of previous day)
+          python scraper.py --date-mode relative --relative-days -1 \
+            --start-time "12:00 AM" --end-time "11:59 PM"
         elif [ "$DATE_MODE" = "week_to_date" ]; then
           # Calculate Monday of current week (week starts on Monday)
           START_DATE=$(TZ="Europe/London" date -v-mon +"%m/%d/%Y" 2>/dev/null || TZ="Europe/London" date -d "monday" +"%m/%d/%Y")
           END_DATE=$(TZ="Europe/London" date +"%m/%d/%Y")
-          python scraper.py --date-mode custom --start-date "$START_DATE" --end-date "$END_DATE" --start-time "12:00 AM" --end-time "11:59 PM"
+          python scraper.py --date-mode custom \
+            --start-date "$START_DATE" \
+            --end-date "$END_DATE" \
+            --start-time "12:00 AM" \
+            --end-time "11:59 PM"
         elif [ "$DATE_MODE" = "relative" ]; then
+          # Relative: full 24 hours of the offset day
           DAYS="${{ github.event.inputs.relative_days || '0' }}"
-          python scraper.py --date-mode relative --relative-days "$DAYS"
+          python scraper.py --date-mode relative --relative-days "$DAYS" \
+            --start-time "12:00 AM" --end-time "11:59 PM"
         elif [ "$DATE_MODE" = "custom" ]; then
+          # Custom: explicit date range with full day
           python scraper.py --date-mode custom \
             --start-date "${{ github.event.inputs.custom_start_date }}" \
             --end-date "${{ github.event.inputs.custom_end_date }}" \
             --start-time "12:00 AM" \
             --end-time "11:59 PM"
         else
-          # Default: today
+          # Default: today (no time range needed, uses current time)
           python scraper.py --date-mode today
         fi
 
