@@ -360,15 +360,28 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
         
         # Step 4: Click "Apply" or "Submit" and wait for metrics response
         # Main dashboard uses "Apply", INF page uses "Submit"
-        apply_btn = page.get_by_role("button", name="Apply")
-        if await apply_btn.count() == 0:
-            app_logger.debug(f"[{store_name}] 'Apply' button not found, looking for 'Submit'")
-            apply_btn = page.get_by_role("button", name="Submit")
-            
-        if await apply_btn.count() > 0:
+        
+        # Try multiple selectors for the Apply button
+        apply_candidates = [
+            page.get_by_role("button", name="Apply"),
+            page.locator("button:has-text('Apply')"),
+            page.locator(".apply-button"),
+            page.locator("[type='submit']"),
+            page.get_by_text("Apply", exact=True),
+            page.get_by_role("button", name="Submit")
+        ]
+        
+        apply_btn = None
+        for candidate in apply_candidates:
+            if await candidate.count() > 0 and await candidate.first.is_visible():
+                apply_btn = candidate.first
+                app_logger.debug(f"[{store_name}] Found Apply/Submit button using selector: {candidate}")
+                break
+        
+        if apply_btn:
             # Use a broader response filter since INF page might use different endpoints
             async with page.expect_response(
-                lambda r: r.status == 200 and ("metrics" in r.url or "inventory" in r.url or "submit" in r.url),
+                lambda r: r.status == 200 and ("metrics" in r.url or "inventory" in r.url or "submit" in r.url or "dashboard" in r.url),
                 timeout=30000
             ) as apply_info:
                 await apply_btn.click(timeout=action_timeout)
@@ -378,9 +391,19 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
                 app_logger.info(f"[{store_name}] Date/time range applied successfully (clicked button)")
             except Exception:
                 app_logger.warning(f"[{store_name}] Clicked apply/submit, but didn't catch expected network response (might still have worked)")
+            
+            # Verify date picker is gone
+            try:
+                await expect(date_picker).to_be_hidden(timeout=3000)
+                app_logger.info(f"[{store_name}] Date picker closed successfully")
+            except:
+                app_logger.warning(f"[{store_name}] Date picker might still be open - click may have failed")
+                
             return True
         else:
             app_logger.warning(f"[{store_name}] Could not find 'Apply' or 'Submit' button to confirm date range")
+            # Take a screenshot to see why we missed the button
+            await _save_screenshot(page, f"debug_missing_apply_{sanitize_store_name(store_name, STORE_PREFIX_RE)}", "output", timezone('Europe/London'), app_logger)
             return False
         
     except AssertionError as e:
