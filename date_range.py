@@ -4,6 +4,11 @@
 
 from datetime import datetime, timedelta
 from playwright.async_api import Page, TimeoutError, expect
+import re
+from pytz import timezone
+from utils import sanitize_store_name, _save_screenshot
+
+STORE_PREFIX_RE = re.compile(r"^morrisons\s*-\s*", re.I)
 
 
 # CSS selectors for the "Customised" dashboard tab
@@ -136,6 +141,12 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
         # Step 2: Wait for date picker to appear
         date_picker = await _wait_for_date_picker(page, 10000)
         app_logger.info(f"[{store_name}] Date picker is visible")
+        
+        # Define STORE_PREFIX_RE locally as requested
+        STORE_PREFIX_RE = re.compile(r"^morrisons\s*-\s*", re.I)
+        
+        # Take a debug screenshot of the date picker to see what we are dealing with
+        await _save_screenshot(page, f"debug_datepicker_{sanitize_store_name(store_name, STORE_PREFIX_RE)}", "output", timezone('Europe/London'), app_logger)
         
         # Step 3: Fill in date and time fields
         # Date inputs are type="text" within the date picker
