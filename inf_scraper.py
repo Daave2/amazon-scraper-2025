@@ -82,8 +82,8 @@ async def navigate_and_extract_inf(page: Page, store_name: str):
         # Wait for table rows to appear
         try:
             await expect(page.locator(f"{table_sel} tr").first).to_be_visible(timeout=20000)
-        except TimeoutError:
-            app_logger.info(f"[{store_name}] No data rows found; returning empty list.")
+        except (TimeoutError, AssertionError):
+            app_logger.info(f"[{store_name}] No data rows found (or table not visible); returning empty list.")
             return []
         
         # Sort by INF Occurrences (only thing we need!)

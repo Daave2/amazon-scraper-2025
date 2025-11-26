@@ -38,6 +38,8 @@ def setup_logging():
         app_logger.handlers.clear()
     
     app_logger.setLevel(logging.INFO)
+    app_logger.propagate = False  # Prevent logs from propagating to root logger
+
     app_file = RotatingFileHandler('app.log', maxBytes=10**7, backupCount=5)
     fmt = LocalTimeFormatter('%(asctime)s %(levelname)s %(message)s')
     app_file.setFormatter(fmt)

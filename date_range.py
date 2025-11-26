@@ -143,8 +143,16 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
         # Wait for inputs to be ready
         await expect(date_inputs.first).to_be_visible(timeout=5000)
         
+        # Click and fill date fields
+        await date_inputs.nth(0).click()
         await date_inputs.nth(0).fill(date_range['start_date'])
+        await date_inputs.nth(1).click()
         await date_inputs.nth(1).fill(date_range['end_date'])
+        
+        # Trigger change events/blur to ensure UI updates
+        await date_inputs.nth(1).blur()
+        await page.wait_for_timeout(1000) # Wait for UI to react (e.g. show time fields)
+        
         app_logger.info(f"[{store_name}] Filled date fields: {date_range['start_date']} to {date_range['end_date']}")
         
         # Time dropdowns - try multiple selector strategies
@@ -223,6 +231,22 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
                     time_filled = True
                 except Exception as e:
                     app_logger.debug(f"[{store_name}] Text input strategy failed: {e}")
+
+        # Strategy 5: Look for input[type="time"] or inputs with time-related classes
+        if not time_filled:
+            explicit_time_inputs = date_picker.locator('input[type="time"], input[class*="time"]')
+            explicit_count = await explicit_time_inputs.count()
+            app_logger.debug(f"[{store_name}] Found {explicit_count} explicit time inputs")
+            
+            if explicit_count >= 2:
+                try:
+                    app_logger.info(f"[{store_name}] Found explicit time inputs, attempting to fill")
+                    await explicit_time_inputs.nth(0).fill(date_range['start_time'])
+                    await explicit_time_inputs.nth(1).fill(date_range['end_time'])
+                    app_logger.info(f"[{store_name}] ✓ Filled time fields via explicit inputs: {date_range['start_time']} to {date_range['end_time']}")
+                    time_filled = True
+                except Exception as e:
+                    app_logger.debug(f"[{store_name}] Explicit time input strategy failed: {e}")
 
         if not time_filled:
             # No time selectors found
