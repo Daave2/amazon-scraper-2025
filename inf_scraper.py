@@ -84,6 +84,8 @@ async def navigate_and_extract_inf(page: Page, store_name: str):
             await expect(page.locator(f"{table_sel} tr").first).to_be_visible(timeout=20000)
         except (TimeoutError, AssertionError):
             app_logger.info(f"[{store_name}] No data rows found (or table not visible); returning empty list.")
+            # Take a debug screenshot to verify if it's truly empty or a loading issue
+            await _save_screenshot(page, f"debug_empty_{sanitize_store_name(store_name, re.compile(r'^morrisons\s*-\s*', re.I))}", "output", timezone('Europe/London'), app_logger)
             return []
         
         # Sort by INF Occurrences (only thing we need!)
