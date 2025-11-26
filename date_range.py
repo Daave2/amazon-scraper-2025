@@ -143,6 +143,55 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
         # Wait for inputs to be ready
         await expect(date_inputs.first).to_be_visible(timeout=5000)
         
+        # Strategy 0: Check for Date Dropdowns (Month, Day, Year selects)
+        # The INF page often uses 3 selects per date (Month, Day, Year) -> 6 total
+        all_selects = page.locator('select')
+        select_count = await all_selects.count()
+        
+        if select_count >= 6:
+            app_logger.info(f"[{store_name}] Found {select_count} dropdowns, attempting to set dates via selects")
+            try:
+                # Parse dates (MM/DD/YYYY)
+                s_m, s_d, s_y = date_range['start_date'].split('/')
+                e_m, e_d, e_y = date_range['end_date'].split('/')
+                
+                # Remove leading zeros if needed (e.g. 01 -> 1)
+                # We try both with and without leading zeros to be safe
+                
+                # Helper to select date part
+                async def select_date_part(nth, val):
+                    sel = all_selects.nth(nth)
+                    # Try exact match first
+                    try:
+                        await sel.select_option(label=val)
+                    except:
+                        try:
+                            await sel.select_option(value=val)
+                        except:
+                            # Try stripping leading zero (05 -> 5)
+                            if val.startswith('0'):
+                                val_no_zero = val[1:]
+                                try:
+                                    await sel.select_option(label=val_no_zero)
+                                except:
+                                    await sel.select_option(value=val_no_zero)
+                
+                # Assume order: Month, Day, Year (based on screenshot: 11, 26, 2025)
+                # Start Date
+                await select_date_part(0, s_m) # Month
+                await select_date_part(1, s_d) # Day
+                await select_date_part(2, s_y) # Year
+                
+                # End Date
+                await select_date_part(3, e_m) # Month
+                await select_date_part(4, e_d) # Day
+                await select_date_part(5, e_y) # Year
+                
+                app_logger.info(f"[{store_name}] Set dates via dropdowns: {date_range['start_date']} to {date_range['end_date']}")
+                
+            except Exception as e:
+                app_logger.warning(f"[{store_name}] Failed to set dates via dropdowns: {e}")
+
         # Helper to robustly fill an input
         async def fill_date_input(locator, value):
             await locator.click()
