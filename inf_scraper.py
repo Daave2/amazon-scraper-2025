@@ -370,6 +370,9 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                 if item.get('std_location'):
                     details += f"\n📍 {item['std_location']}"
                 
+                if item.get('promo_location'):
+                    details += f"\n🏷️ {item['promo_location']}"
+                
                 # Column 1: Text Details (LEFT)
                 col1_widgets = [{
                     "textParagraph": {
@@ -637,7 +640,9 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         title_prefix = ""
         if active_config.get('use_date_range'):
             mode = active_config.get('date_range_mode')
-            if mode == 'yesterday':
+            if mode == 'today':
+                title_prefix = "Today's "
+            elif mode == 'yesterday':
                 title_prefix = "Yesterday's "
             elif mode == 'last_7_days':
                 title_prefix = "Last 7 Days "

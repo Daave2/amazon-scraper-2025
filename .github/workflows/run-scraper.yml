@@ -183,7 +183,13 @@ jobs:
           python scraper.py --date-mode last_30_days
         elif [ "$DATE_MODE" = "week_to_date" ]; then
           # Calculate Monday of current week (week starts on Monday)
-          START_DATE=$(TZ="Europe/London" date -v-mon +"%m/%d/%Y" 2>/dev/null || TZ="Europe/London" date -d "monday" +"%m/%d/%Y")
+          # Linux/GNU date compatible
+          current_day=$(TZ="Europe/London" date +%u)
+          if [ "$current_day" -eq 1 ]; then
+            START_DATE=$(TZ="Europe/London" date +"%m/%d/%Y")
+          else
+            START_DATE=$(TZ="Europe/London" date -d "last monday" +"%m/%d/%Y")
+          fi
           END_DATE=$(TZ="Europe/London" date +"%m/%d/%Y")
           python scraper.py --date-mode custom \
             --start-date "$START_DATE" \
