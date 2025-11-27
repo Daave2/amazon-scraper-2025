@@ -369,7 +369,10 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                 details += f"⚠️ INF Units: <b>{item['inf']}</b>"
                 
                 # Add discontinuation warning if product is not active
-                if item.get('product_status') != 'A' or item.get('commercially_active') != 'Yes':
+                # Only show if BOTH conditions indicate discontinued AND item has no location
+                # (if it has a location, it's clearly still ranged regardless of API status)
+                has_location = item.get('std_location') or item.get('promo_location')
+                if not has_location and item.get('product_status') != 'A' and item.get('commercially_active') != 'Yes':
                     details += f"\n🚫 <b><font color='#d93025'>DISCONTINUED/NOT RANGED</font></b>"
                 
                 if ENRICH_STOCK_DATA:
