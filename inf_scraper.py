@@ -357,7 +357,20 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                 # Text Details (Left Column)
                 details = f"<b>{item['name']}</b>\n\n"
                 details += f"📦 SKU: <font color='#1a73e8'>{sku}</font>\n"
+                
+                # Add barcode if available
+                if item.get('barcode'):
+                    details += f"🔢 EAN: {item['barcode']}\n"
+                
+                # Add price if available
+                if item.get('price') is not None:
+                    details += f"💷 £{item['price']:.2f}\n"
+                
                 details += f"⚠️ INF Units: <b>{item['inf']}</b>"
+                
+                # Add discontinuation warning if product is not active
+                if item.get('product_status') != 'A' or item.get('commercially_active') != 'Yes':
+                    details += f"\n🚫 <b><font color='#d93025'>DISCONTINUED/NOT RANGED</font></b>"
                 
                 if ENRICH_STOCK_DATA:
                     stock_qty = item.get('stock_on_hand')

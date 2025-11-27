@@ -138,6 +138,22 @@ def _fetch_morrisons_data_for_sku(sku: str, location_id: str, api_key: str, bear
                     if morrisons_image_url:
                         results["image_url"] = morrisons_image_url
                         app_logger.debug(f"Found Morrisons image for SKU {sku}: {morrisons_image_url}")
+            
+            # Extract barcode (EAN) - get primary barcode
+            gtins = product_data.get("gtins", [])
+            for gtin in gtins:
+                if gtin.get("additionalProperties", {}).get("isPrimaryBarcode"):
+                    results["barcode"] = gtin.get("id")
+                    app_logger.debug(f"Found primary barcode for SKU {sku}: {gtin.get('id')}")
+                    break
+            
+            # Extract product status
+            status = product_data.get("status")
+            commercially_active = product_data.get("commerciallyActive")
+            results["product_status"] = status
+            results["commercially_active"] = commercially_active
+            if status != "A" or commercially_active != "Yes":
+                app_logger.debug(f"SKU {sku} status: {status}, commercially active: {commercially_active}")
 
         if stock_payload:
             pos = (stock_payload or {}).get("stockPosition", [{}])[0]
@@ -158,6 +174,17 @@ def _fetch_morrisons_data_for_sku(sku: str, location_id: str, api_key: str, bear
             results["promo_location"] = promo_loc
             results["aisle_number"] = aisle_number
             app_logger.debug(f"Found locations for PI SKU {pi_sku}")
+            
+            # Extract price if available
+            prices = pi_data.get("prices", [])
+            if prices and isinstance(prices, list) and len(prices) > 0:
+                # Get the first price (usually the current price)
+                price_data = prices[0]
+                if isinstance(price_data, dict):
+                    price = price_data.get("price")
+                    if price is not None:
+                        results["price"] = price
+                        app_logger.debug(f"Found price for SKU {pi_sku}: £{price}")
 
         return results
 
