@@ -9,7 +9,18 @@ name: Full INF Scrape
 on:
   # Manual trigger
   workflow_dispatch:
-  
+    inputs:
+      date_mode:
+        description: 'Date range mode'
+        required: false
+        default: 'today'
+        type: choice
+        options:
+          - today
+          - yesterday
+          - last_7_days
+          - last_30_days
+
   # Scheduled: Optional, e.g. weekly
   # schedule:
   #   - cron: '0 8 * * 1'  # Every Monday at 8 AM
@@ -93,8 +104,10 @@ jobs:
         if_no_artifact_found: warn
         search_artifacts: true
 
-    - name: Run Full INF Scrape (Yesterday's Data)
-      run: python scraper.py --date-mode yesterday --inf-only
+    - name: Run Full INF Scrape
+      run: |
+        DATE_MODE="${{ github.event.inputs.date_mode || 'today' }}"
+        python scraper.py --date-mode "$DATE_MODE" --inf-only
 
 
     - name: Upload artifacts on failure or success
