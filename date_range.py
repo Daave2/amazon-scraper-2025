@@ -171,6 +171,20 @@ def get_date_time_range_from_config(config: dict, local_timezone, app_logger) ->
         # These modes use built-in filters, no need to calculate dates for input
         pass
     
+    elif mode == 'week_to_date':
+        # Calculate Monday of current week to Today
+        # weekday(): Monday is 0, Sunday is 6
+        current_weekday = now.weekday()
+        start_of_week = now - timedelta(days=current_weekday)
+        
+        start_date = start_of_week.strftime("%m/%d/%Y")
+        end_date = now.strftime("%m/%d/%Y")
+        start_time = "12:00 AM"
+        end_time = "11:59 PM"
+        
+        # Map to custom for the applicator to use inputs
+        mode = 'custom'
+
     elif mode == 'relative':
         days_offset = config.get('relative_days', 0)
         target_date = now + timedelta(days=days_offset)

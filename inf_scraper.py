@@ -364,6 +364,18 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                     if stock_qty is not None:
                         stock_unit = item.get('stock_unit', '')
                         details += f"\n📊 Stock: {stock_qty} {stock_unit}"
+                        
+                        if item.get('stock_last_updated'):
+                            # Format timestamp if needed, or just display
+                            # Assuming ISO format or similar readable string from API
+                            ts = item['stock_last_updated']
+                            # Try to make it more readable if it's a long ISO string
+                            try:
+                                dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                                ts_display = dt.strftime("%H:%M")
+                                details += f" (at {ts_display})"
+                            except:
+                                pass # Keep silent if parsing fails
                     else:
                         details += f"\n📊 Stock: Not Found"
                 
@@ -452,7 +464,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                 "cardId": f"inf-stores-{batch_num}-{int(datetime.now().timestamp())}",
                 "card": {
                     "header": {
-                        "title": f"{title_prefix}INF by Store - Part {batch_num}/{len(batches)}",
+                        "title": f"{title_prefix}INF by Store - {datetime.now(LOCAL_TIMEZONE).strftime('%H:%M')} - Part {batch_num}/{len(batches)}",
                         "subtitle": f"Showing {len(batch)} stores",
                         "imageUrl": "https://cdn-icons-png.flaticon.com/512/869/869636.png",
                         "imageType": "CIRCLE"
