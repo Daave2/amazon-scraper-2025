@@ -56,6 +56,102 @@ async def _wait_for_date_picker(page: Page, wait_timeout: int):
     raise AssertionError("Date picker not found with known selectors")
 
 
+
+async def _apply_custom_date_range(page: Page, store_name: str, date_range: dict, action_timeout: int, app_logger) -> bool:
+    """Helper to apply a custom date range using inputs."""
+    app_logger.info(f"[{store_name}] Applying Customised range: {date_range['start_date']} {date_range['start_time']} to {date_range['end_date']} {date_range['end_time']}")
+    
+    # Click "Customised" tab
+    try:
+        await page.get_by_role("link", name="Customised").click()
+    except:
+        # Fallback to previous selectors if link role fails
+        customised_tab = await _find_customised_tab(page, 5000)
+        await customised_tab.click(timeout=action_timeout, force=True)
+    
+    app_logger.info(f"[{store_name}] Clicked 'Customised' tab")
+    
+    # Wait for the date picker widget to load
+    try:
+        # Try waiting for the specific IDs mentioned by user first
+        await page.wait_for_selector("#startDate", state="visible", timeout=5000)
+        app_logger.info(f"[{store_name}] Found #startDate input")
+        
+        # Helper to fill date
+        async def fill_input_id(id_val, val):
+            loc = page.locator(id_val)
+            await loc.click()
+            await loc.clear()
+            await loc.type(val, delay=50)
+            await loc.press('Enter')
+        
+        await fill_input_id("#startDate", date_range['start_date'])
+        await fill_input_id("#endDate", date_range['end_date'])
+        
+    except TimeoutError:
+        # Fallback to the previous logic (kat-date-range-picker)
+        app_logger.info(f"[{store_name}] #startDate not found, trying kat-date-range-picker")
+        
+        await page.wait_for_selector("kat-date-range-picker", state="attached", timeout=5000)
+        date_picker = await _wait_for_date_picker(page, 10000)
+        
+        # Define STORE_PREFIX_RE locally as requested
+        STORE_PREFIX_RE = re.compile(r"^morrisons\s*-\s*", re.I)
+        
+        # Take a debug screenshot
+        await _save_screenshot(page, f"debug_datepicker_{sanitize_store_name(store_name, STORE_PREFIX_RE)}", "output", timezone('Europe/London'), app_logger)
+        
+        # Date inputs are type="text" within the date picker
+        date_inputs = date_picker.locator('input[type="text"]')
+        await expect(date_inputs.first).to_be_visible(timeout=5000)
+        
+        # Helper to robustly fill an input
+        async def fill_date_input(locator, value):
+            await locator.click()
+            await locator.clear()
+            await locator.type(value, delay=50)
+            await locator.press('Enter')
+            await locator.evaluate("(el, val) => { el.value = val; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); }", value)
+
+        # Fill date fields
+        await fill_date_input(date_inputs.nth(0), date_range['start_date'])
+        await fill_date_input(date_inputs.nth(1), date_range['end_date'])
+        
+        await date_inputs.nth(1).blur()
+        await page.wait_for_timeout(1000)
+    
+    # Final Apply Step (Common to both custom flows)
+    apply_candidates = [
+        page.get_by_role("button", name="Apply"),
+        page.locator("button:has-text('Apply')"),
+        page.locator(".apply-button"),
+        page.locator("[type='submit']"),
+        page.get_by_text("Apply", exact=True),
+        page.get_by_role("button", name="Submit")
+    ]
+    
+    apply_btn = None
+    for candidate in apply_candidates:
+        if await candidate.count() > 0 and await candidate.first.is_visible():
+            apply_btn = candidate.first
+            break
+    
+    if apply_btn:
+        async with page.expect_response(
+            lambda r: r.status == 200 and ("metrics" in r.url or "inventory" in r.url or "submit" in r.url or "dashboard" in r.url),
+            timeout=30000
+        ) as apply_info:
+            await apply_btn.click(timeout=action_timeout)
+        try:
+            await apply_info.value
+        except:
+            pass
+        return True
+    else:
+        app_logger.warning(f"[{store_name}] Could not find 'Apply' button")
+        return False
+
+
 def get_date_time_range_from_config(config: dict, local_timezone, app_logger) -> dict | None:
     """Calculate start/end dates and times based on configuration.
     
@@ -126,7 +222,6 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
     
     mode = date_range.get('mode')
     
-    try:
         if mode == 'today':
             app_logger.info(f"[{store_name}] Mode is 'today' (default view) - no action needed")
             return True
@@ -147,111 +242,7 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
             return True
             
         elif mode == 'custom':
-            app_logger.info(f"[{store_name}] Applying Customised range: {date_range['start_date']} {date_range['start_time']} to {date_range['end_date']} {date_range['end_time']}")
-            
-            # Click "Customised" tab
-            try:
-                await page.get_by_role("link", name="Customised").click()
-            except:
-                # Fallback to previous selectors if link role fails
-                customised_tab = await _find_customised_tab(page, 5000)
-                await customised_tab.click(timeout=action_timeout, force=True)
-            
-            app_logger.info(f"[{store_name}] Clicked 'Customised' tab")
-            
-            # Wait for the date picker widget to load
-            try:
-                # Try waiting for the specific IDs mentioned by user first
-                await page.wait_for_selector("#startDate", state="visible", timeout=5000)
-                app_logger.info(f"[{store_name}] Found #startDate input")
-                
-                # If we found #startDate, we are likely in the view the user described.
-                # We can try to fill these inputs directly.
-                
-                # Helper to fill date
-                async def fill_input_id(id_val, val):
-                    loc = page.locator(id_val)
-                    await loc.click()
-                    await loc.clear()
-                    await loc.type(val, delay=50)
-                    await loc.press('Enter')
-                
-                await fill_input_id("#startDate", date_range['start_date'])
-                await fill_input_id("#endDate", date_range['end_date'])
-                
-                # Handle time if inputs exist (not specified in user request but good to have)
-                # ...
-                
-                # Click Apply/Submit
-                # The user didn't specify the apply button for this flow, so we fall back to generic search
-                
-            except TimeoutError:
-                # Fallback to the previous logic (kat-date-range-picker)
-                app_logger.info(f"[{store_name}] #startDate not found, trying kat-date-range-picker")
-                
-                await page.wait_for_selector("kat-date-range-picker", state="attached", timeout=5000)
-                date_picker = await _wait_for_date_picker(page, 10000)
-                
-                # ... (Existing logic for kat-date-range-picker) ...
-                
-                # Define STORE_PREFIX_RE locally as requested
-                STORE_PREFIX_RE = re.compile(r"^morrisons\s*-\s*", re.I)
-                
-                # Take a debug screenshot
-                await _save_screenshot(page, f"debug_datepicker_{sanitize_store_name(store_name, STORE_PREFIX_RE)}", "output", timezone('Europe/London'), app_logger)
-                
-                # Date inputs are type="text" within the date picker
-                date_inputs = date_picker.locator('input[type="text"]')
-                await expect(date_inputs.first).to_be_visible(timeout=5000)
-                
-                # Helper to robustly fill an input
-                async def fill_date_input(locator, value):
-                    await locator.click()
-                    await locator.clear()
-                    await locator.type(value, delay=50)
-                    await locator.press('Enter')
-                    await locator.evaluate("(el, val) => { el.value = val; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); }", value)
-
-                # Fill date fields
-                await fill_date_input(date_inputs.nth(0), date_range['start_date'])
-                await fill_date_input(date_inputs.nth(1), date_range['end_date'])
-                
-                await date_inputs.nth(1).blur()
-                await page.wait_for_timeout(1000)
-                
-                # Try to fill times (reuse existing logic if needed, simplified here for brevity)
-                # ...
-            
-            # Final Apply Step (Common to both custom flows)
-            apply_candidates = [
-                page.get_by_role("button", name="Apply"),
-                page.locator("button:has-text('Apply')"),
-                page.locator(".apply-button"),
-                page.locator("[type='submit']"),
-                page.get_by_text("Apply", exact=True),
-                page.get_by_role("button", name="Submit")
-            ]
-            
-            apply_btn = None
-            for candidate in apply_candidates:
-                if await candidate.count() > 0 and await candidate.first.is_visible():
-                    apply_btn = candidate.first
-                    break
-            
-            if apply_btn:
-                async with page.expect_response(
-                    lambda r: r.status == 200 and ("metrics" in r.url or "inventory" in r.url or "submit" in r.url or "dashboard" in r.url),
-                    timeout=30000
-                ) as apply_info:
-                    await apply_btn.click(timeout=action_timeout)
-                try:
-                    await apply_info.value
-                except:
-                    pass
-                return True
-            else:
-                app_logger.warning(f"[{store_name}] Could not find 'Apply' button")
-                return False
+            return await _apply_custom_date_range(page, store_name, date_range, action_timeout, app_logger)
 
     except Exception as e:
         app_logger.error(f"[{store_name}] Error applying date range: {e}", exc_info=debug_mode)

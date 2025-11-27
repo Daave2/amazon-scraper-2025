@@ -203,8 +203,13 @@ jobs:
             --start-time "12:00 AM" \
             --end-time "11:59 PM"
         else
-          # Default: today (no time range needed, uses current time)
-          python scraper.py --date-mode today
+          # Default: today (needs explicit dates for Performance Dashboard)
+          TODAY=$(TZ="Europe/London" date +"%m/%d/%Y")
+          python scraper.py --date-mode custom \
+            --start-date "$TODAY" \
+            --end-date "$TODAY" \
+            --start-time "12:00 AM" \
+            --end-time "11:59 PM"
         fi
 
 
