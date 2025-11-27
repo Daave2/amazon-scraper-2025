@@ -267,13 +267,14 @@ def generate_qr_code_data_url(sku: str) -> str:
         return ""
 
 
-async def send_inf_report(store_data, network_top_10, skip_network_report=False):
+async def send_inf_report(store_data, network_top_10, skip_network_report=False, title_prefix=""):
     """Send INF report to Google Chat
     
     Args:
         store_data: List of tuples (store_name, store_number, items, inf_rate)
         network_top_10: List of top 10 items network-wide
         skip_network_report: If True, skip sending the network-wide summary
+        title_prefix: Optional prefix for the report title (e.g. "Yesterday's ")
     """
     import aiohttp
     import ssl
@@ -304,7 +305,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                 "cardId": f"inf-network-{int(datetime.now().timestamp())}",
                 "card": {
                     "header": {
-                        "title": "INF Analysis - Network Wide",
+                        "title": f"{title_prefix}INF Analysis - Network Wide",
                         "subtitle": datetime.now(LOCAL_TIMEZONE).strftime("%A %d %B, %H:%M"),
                         "imageUrl": "https://cdn-icons-png.flaticon.com/512/272/272525.png",
                         "imageType": "CIRCLE"
@@ -450,7 +451,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                 "cardId": f"inf-stores-{batch_num}-{int(datetime.now().timestamp())}",
                 "card": {
                     "header": {
-                        "title": f"INF by Store - Part {batch_num}/{len(batches)}",
+                        "title": f"{title_prefix}INF by Store - Part {batch_num}/{len(batches)}",
                         "subtitle": f"Showing {len(batch)} stores",
                         "imageUrl": "https://cdn-icons-png.flaticon.com/512/869/869636.png",
                         "imageType": "CIRCLE"
@@ -632,9 +633,24 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         network_list.sort(key=lambda x: x['inf'], reverse=True)
         network_top_10 = network_list[:10]
         
+        # Determine title prefix based on date mode
+        title_prefix = ""
+        if active_config.get('use_date_range'):
+            mode = active_config.get('date_range_mode')
+            if mode == 'yesterday':
+                title_prefix = "Yesterday's "
+            elif mode == 'last_7_days':
+                title_prefix = "Last 7 Days "
+            elif mode == 'last_30_days':
+                title_prefix = "Last 30 Days "
+            elif mode == 'week_to_date':
+                title_prefix = "Week to Date "
+            elif mode == 'custom':
+                title_prefix = "Custom Range "
+
         # Send Report - skip network-wide report if called from main scraper with specific stores
         skip_network = target_stores is not None
-        await send_inf_report(results_list, network_top_10, skip_network_report=skip_network)
+        await send_inf_report(results_list, network_top_10, skip_network_report=skip_network, title_prefix=title_prefix)
         
     finally:
         if local_playwright:
