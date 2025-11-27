@@ -646,7 +646,15 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             elif mode == 'week_to_date':
                 title_prefix = "Week to Date "
             elif mode == 'custom':
-                title_prefix = "Custom Range "
+                # Check if it's actually "Today" (custom dates matching today)
+                try:
+                    today_str = datetime.now(LOCAL_TIMEZONE).strftime("%m/%d/%Y")
+                    if active_config.get('custom_start_date') == today_str and active_config.get('custom_end_date') == today_str:
+                        title_prefix = "Today's "
+                    else:
+                        title_prefix = "Custom Range "
+                except:
+                    title_prefix = "Custom Range "
 
         # Send Report - skip network-wide report if called from main scraper with specific stores
         skip_network = target_stores is not None
