@@ -388,7 +388,6 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                 # Prepare high-res product image URL
                 high_res_url = img_url
                 if img_url:
-                    app_logger.info(f"[DEBUG] Original image URL: {img_url}")
                     # Skip resizing for Morrisons/Brandbank images
                     if 'brandbank' in img_url.lower():
                         high_res_url = img_url
@@ -399,7 +398,6 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                         # If no size parameters found, try adding one
                         if high_res_url == img_url and ('.jpg' in high_res_url or '.png' in high_res_url):
                             high_res_url = re.sub(r'\.(jpg|png)', r'._SL500_.\1', high_res_url)
-                    app_logger.info(f"[DEBUG] Transformed to: {high_res_url}")
                 
                 # Build right column widgets: text details + product image
                 right_column_widgets = [
