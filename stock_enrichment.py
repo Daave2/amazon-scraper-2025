@@ -126,6 +126,19 @@ def _fetch_morrisons_data_for_sku(sku: str, location_id: str, api_key: str, bear
 
         # 4. Extract stock and location information
         results = {}
+        
+        # Extract image URL from product data if available
+        if product_data:
+            images = product_data.get("imageUrl", [])
+            if images and isinstance(images, list):
+                # Use the first image found
+                first_image = images[0]
+                if isinstance(first_image, dict):
+                    morrisons_image_url = first_image.get("url")
+                    if morrisons_image_url:
+                        results["image_url"] = morrisons_image_url
+                        app_logger.debug(f"Found Morrisons image for SKU {sku}: {morrisons_image_url}")
+
         if stock_payload:
             pos = (stock_payload or {}).get("stockPosition", [{}])[0]
             results["stock_on_hand"] = pos.get("qty")

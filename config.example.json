@@ -34,5 +34,12 @@
   },
   "morrisons_api_key": "YOUR_MORRISONS_API_KEY",
   "morrisons_bearer_token_url": "https://gist.githubusercontent.com/YOUR_USERNAME/GIST_ID/raw/FILE",
-  "enrich_stock_data": true
+  "enrich_stock_data": true,
+  "use_date_range": false,
+  "date_range_mode": "today",
+  "relative_days": 0,
+  "custom_start_date": "11/27/2025",
+  "custom_end_date": "11/27/2025",
+  "start_time": "12:00 AM",
+  "end_time": "11:59 PM"
 }

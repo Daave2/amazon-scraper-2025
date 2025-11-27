@@ -48,7 +48,7 @@ except json.JSONDecodeError:
 
 # --- CLI Argument Parsing ---
 parser = argparse.ArgumentParser(description='Amazon Seller Central Scraper')
-parser.add_argument('--date-mode', choices=['today', 'relative', 'custom'], help='Date range mode')
+parser.add_argument('--date-mode', choices=['today', 'yesterday', 'last_7_days', 'last_30_days', 'relative', 'custom'], help='Date range mode')
 parser.add_argument('--start-date', help='Start date (MM/DD/YYYY)')
 parser.add_argument('--end-date', help='End date (MM/DD/YYYY)')
 parser.add_argument('--start-time', help='Start time (e.g., "12:00 AM")')
@@ -249,7 +249,7 @@ async def process_urls():
         all_stores = []
         load_default_data(all_stores, app_logger)
         if all_stores:
-             await run_inf_analysis(all_stores, browser)
+             await run_inf_analysis(all_stores, browser, config)
         else:
              app_logger.error("No stores found for INF analysis.")
         return
@@ -400,7 +400,7 @@ async def process_urls():
                 if target_stores_for_inf:
                     app_logger.info(f"Triggering INF analysis for {len(target_stores_for_inf)} stores: {[s['store_name'] for s in target_stores_for_inf]}")
                     # Run INF analysis using the existing browser
-                    await run_inf_analysis(target_stores_for_inf, browser)
+                    await run_inf_analysis(target_stores_for_inf, browser, config)
                 else:
                     app_logger.info("No stores found for INF analysis.")
                     

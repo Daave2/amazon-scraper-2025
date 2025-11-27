@@ -62,6 +62,11 @@ try:
         print(f"      ✓ SUCCESS - Product data retrieved")
         data = r.json()
         print(f"      Product: {data.get('description', 'N/A')}")
+        
+        # Check for image URL
+        images = data.get("imageUrl", [])
+        if images and isinstance(images, list) and len(images) > 0:
+            print(f"      Image URL: {images[0].get('url', 'N/A')}")
     elif r.status_code == 401:
         print(f"      ✗ UNAUTHORIZED (401)")
         print(f"      Response: {r.text[:200]}")

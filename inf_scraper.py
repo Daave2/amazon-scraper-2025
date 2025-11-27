@@ -385,12 +385,16 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                 high_res_url = img_url
                 if img_url:
                     app_logger.info(f"[DEBUG] Original image URL: {img_url}")
-                    # Use regex to replace any Amazon image size parameters with high-res version
-                    high_res_url = re.sub(r'_S[LXY]\d+_', '_SL500_', img_url)
-                    high_res_url = re.sub(r'_AC_UL\d+_', '_AC_UL500_', high_res_url)
-                    # If no size parameters found, try adding one
-                    if high_res_url == img_url and ('.jpg' in high_res_url or '.png' in high_res_url):
-                        high_res_url = re.sub(r'\.(jpg|png)', r'._SL500_.\1', high_res_url)
+                    # Skip resizing for Morrisons/Brandbank images
+                    if 'brandbank' in img_url.lower():
+                        high_res_url = img_url
+                    else:
+                        # Use regex to replace any Amazon image size parameters with high-res version
+                        high_res_url = re.sub(r'_S[LXY]\d+_', '_SL500_', img_url)
+                        high_res_url = re.sub(r'_AC_UL\d+_', '_AC_UL500_', high_res_url)
+                        # If no size parameters found, try adding one
+                        if high_res_url == img_url and ('.jpg' in high_res_url or '.png' in high_res_url):
+                            high_res_url = re.sub(r'\.(jpg|png)', r'._SL500_.\1', high_res_url)
                     app_logger.info(f"[DEBUG] Transformed to: {high_res_url}")
                 
                 # Build right column widgets: text details + product image
@@ -498,7 +502,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False)
                     app_logger.error(f"Error sending store batch {batch_num} after {max_retries} attempts: {e}")
 
 
-async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: Browser = None):
+async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: Browser = None, config_override: Dict = None):
     app_logger.info("Starting INF Analysis...")
     
     # Load stores if not provided
@@ -560,9 +564,12 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         with open(STORAGE_STATE) as f:
             storage_state = json.load(f)
         
+        # Use overridden config if provided, otherwise use global config
+        active_config = config_override if config_override else config
+
         # Create date range function (same as main scraper)
         def get_date_range():
-            return get_date_time_range_from_config(config, LOCAL_TIMEZONE, app_logger)
+            return get_date_time_range_from_config(active_config, LOCAL_TIMEZONE, app_logger)
         
         # Determine ACTION_TIMEOUT
         ACTION_TIMEOUT = int(PAGE_TIMEOUT / 2)
@@ -635,7 +642,39 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             await local_playwright.stop()
 
 async def main():
-    await run_inf_analysis()
+    import argparse
+    
+    # CLI Argument Parsing
+    parser = argparse.ArgumentParser(description='INF Scraper (Standalone)')
+    parser.add_argument('--date-mode', choices=['today', 'yesterday', 'last_7_days', 'last_30_days', 'relative', 'custom'], help='Date range mode')
+    parser.add_argument('--start-date', help='Start date (MM/DD/YYYY)')
+    parser.add_argument('--end-date', help='End date (MM/DD/YYYY)')
+    parser.add_argument('--start-time', help='Start time (e.g., "12:00 AM")')
+    parser.add_argument('--end-time', help='End time (e.g., "11:59 PM")')
+    parser.add_argument('--relative-days', type=int, help='Days offset for relative mode')
+    
+    args, unknown = parser.parse_known_args()
+    
+    # Create a copy of the global config to modify
+    local_config = config.copy()
+    
+    # Merge CLI args into config
+    if args.date_mode:
+        local_config['use_date_range'] = True
+        local_config['date_range_mode'] = args.date_mode
+
+    if args.start_date: local_config['custom_start_date'] = args.start_date
+    if args.end_date: local_config['custom_end_date'] = args.end_date
+    if args.start_time: local_config['custom_start_time'] = args.start_time
+    if args.end_time: local_config['custom_end_time'] = args.end_time
+    if args.relative_days is not None: local_config['relative_days'] = args.relative_days
+    
+    # Force custom mode if dates provided without mode
+    if (args.start_date or args.end_date) and not args.date_mode:
+        local_config['use_date_range'] = True
+        local_config['date_range_mode'] = 'custom'
+
+    await run_inf_analysis(config_override=local_config)
 
 if __name__ == "__main__":
     asyncio.run(main())
