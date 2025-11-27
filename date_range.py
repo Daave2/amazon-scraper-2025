@@ -222,6 +222,7 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
     
     mode = date_range.get('mode')
     
+    try:
         if mode == 'today':
             app_logger.info(f"[{store_name}] Mode is 'today' (default view) - no action needed")
             return True
