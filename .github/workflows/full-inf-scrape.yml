@@ -20,6 +20,15 @@ on:
           - yesterday
           - last_7_days
           - last_30_days
+      top_items:
+        description: 'Number of top INF items to show per store'
+        required: false
+        default: '5'
+        type: choice
+        options:
+          - '5'
+          - '10'
+          - '25'
 
   # Scheduled: Optional, e.g. weekly
   # schedule:
@@ -104,10 +113,19 @@ jobs:
         if_no_artifact_found: warn
         search_artifacts: true
 
-    - name: Run Full INF Scrape
+    - name: Determine date mode - use input if provided, otherwise default to 'today'
+      id: date-mode
       run: |
         DATE_MODE="${{ github.event.inputs.date_mode || 'today' }}"
-        python scraper.py --date-mode "$DATE_MODE" --inf-only
+        echo "DATE_MODE=$DATE_MODE" >> $GITHUB_ENV
+        TOP_ITEMS="${{ github.event.inputs.top_items || '5' }}"
+        echo "TOP_ITEMS=$TOP_ITEMS" >> $GITHUB_ENV
+
+    - name: Run Full INF Scrape
+      env:
+        PWDEBUG: 0
+      run: |
+        python scraper.py --date-mode "$DATE_MODE" --inf-only --top-n "$TOP_ITEMS"
 
 
     - name: Upload artifacts on failure or success

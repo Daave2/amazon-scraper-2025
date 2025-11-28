@@ -56,6 +56,7 @@ parser.add_argument('--end-time', help='End time (e.g., "11:59 PM")')
 parser.add_argument('--relative-days', type=int, help='Days offset for relative mode')
 parser.add_argument('--inf-mode', choices=['top10', 'all'], default='top10', help='INF analysis mode: top10 worst stores or all stores')
 parser.add_argument('--inf-only', action='store_true', help='Run ONLY INF analysis for all stores, skipping dashboard metrics')
+parser.add_argument('--top-n', type=int, default=5, help='Number of top INF items to show per store (5, 10, or 25)')
 
 args, unknown = parser.parse_known_args()
 
@@ -69,6 +70,7 @@ if args.end_date: config['custom_end_date'] = args.end_date
 if args.start_time: config['custom_start_time'] = args.start_time
 if args.end_time: config['custom_end_time'] = args.end_time
 if args.relative_days is not None: config['relative_days'] = args.relative_days
+config['top_n_items'] = args.top_n  # Store top_n in config for INF scraper
 
 # If start/end dates are provided via CLI, force mode to 'custom' if not specified
 if (args.start_date or args.end_date) and not args.date_mode:

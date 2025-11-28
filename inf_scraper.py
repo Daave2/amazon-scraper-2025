@@ -267,7 +267,7 @@ def generate_qr_code_data_url(sku: str) -> str:
         return ""
 
 
-async def send_inf_report(store_data, network_top_10, skip_network_report=False, title_prefix=""):
+async def send_inf_report(store_data, network_top_10, skip_network_report=False, title_prefix="", top_n=5):
     """Send INF report to Google Chat
     
     Args:
@@ -275,6 +275,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
         network_top_10: List of top 10 items network-wide
         skip_network_report: If True, skip sending the network-wide summary
         title_prefix: Optional prefix for the report title (e.g. "Yesterday's ")
+        top_n: Number of top items to show per store (5, 10, 25)
     """
     import aiohttp
     import ssl
@@ -327,13 +328,19 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
             app_logger.error(f"Error sending network INF report: {e}")
             return
     
-    # Message 2+: All Stores (sorted by INF rate, highest first)
-    # Sort alphabetically by store name as requested
+    # Message 2+: All Stores (sorted alphabetically)
     sorted_store_data = sorted(store_data, key=lambda x: x[0])
     stores_with_data = [(name, num, items, inf_rate) for name, num, items, inf_rate in sorted_store_data if items]
     
-    # Batch size set to 10 as images take more space/payload
-    BATCH_SIZE = 10
+    # Dynamic batch size based on items shown
+    # More items per store = fewer stores per batch to avoid payload limits
+    if top_n <= 5:
+        BATCH_SIZE = 10
+    elif top_n <= 10:
+        BATCH_SIZE = 7
+    else:  # top_n >= 25
+        BATCH_SIZE = 3
+    
     batches = [stores_with_data[i:i + BATCH_SIZE] for i in range(0, len(stores_with_data), BATCH_SIZE)]
     
     for batch_num, batch in enumerate(batches, 1):
@@ -348,8 +355,8 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
             inf_display = f"INF: {inf_rate}" if inf_rate != 'N/A' else f"Total INF: {total_inf}"
             section_header = f"{clean_store_name} | {inf_display}"
             
-            # Show top 5 items with card layout
-            for item in items[:5]:
+            # Show top N items with card layout
+            for item in items[:top_n]:
                 # Build Columns Widget
                 img_url = item.get('image_url', '')
                 sku = item['sku']
@@ -366,13 +373,16 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                 if item.get('price') is not None:
                     details += f"💷 £{item['price']:.2f}\n"
                 
-                details += f"⚠️ INF Units: <b>{item['inf']}</b>"
-                
                 # Add discontinuation warning if product is not active
-                # Only show if BOTH conditions indicate discontinued AND item has no location
-                # (if it has a location, it's clearly still ranged regardless of API status)
+                # Only show if:
+                # 1. We have valid status data from API (not None)
+                # 2. Item has no location (if it has a location, it's still ranged)
+                # 3. Status indicates discontinued
                 has_location = item.get('std_location') or item.get('promo_location')
-                if not has_location and item.get('product_status') != 'A' and item.get('commercially_active') != 'Yes':
+                has_status_data = item.get('product_status') is not None or item.get('commercially_active') is not None
+                is_discontinued = item.get('product_status') != 'A' and item.get('commercially_active') != 'Yes'
+                
+                if has_status_data and not has_location and is_discontinued:
                     details += f"\n🚫 <b><font color='#d93025'>DISCONTINUED/NOT RANGED</font></b>"
                 
                 if ENRICH_STOCK_DATA:
@@ -689,7 +699,8 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
 
         # Send Report - skip network-wide report if called from main scraper with specific stores
         skip_network = target_stores is not None
-        await send_inf_report(results_list, network_top_10, skip_network_report=skip_network, title_prefix=title_prefix)
+        top_n = active_config.get('top_n_items', 5)  # Default to 5 if not specified
+        await send_inf_report(results_list, network_top_10, skip_network_report=skip_network, title_prefix=title_prefix, top_n=top_n)
         
     finally:
         if local_playwright:
