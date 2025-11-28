@@ -335,9 +335,9 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
     # Dynamic batch size based on items shown
     # More items per store = fewer stores per batch to avoid payload limits
     if top_n <= 5:
-        BATCH_SIZE = 10
+        BATCH_SIZE = 8  # Reduced from 10 for safety
     elif top_n <= 10:
-        BATCH_SIZE = 7
+        BATCH_SIZE = 4  # Reduced from 7 due to payload errors
     else:  # top_n >= 25
         BATCH_SIZE = 3
     

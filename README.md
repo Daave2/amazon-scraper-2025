@@ -365,8 +365,8 @@ Or via GitHub Actions workflow inputs:
 - **Full INF Scrape** workflow has `top_items` dropdown (5, 10, 25)
 
 **Note**: Batch sizes adjust automatically to prevent payload errors:
-- Top 5: 10 stores/batch
-- Top 10: 7 stores/batch
+- Top 5: 8 stores/batch
+- Top 10: 4 stores/batch
 - Top 25: 3 stores/batch
 
 See [`docs/INF_REPORT_ENHANCEMENTS.md`](docs/INF_REPORT_ENHANCEMENTS.md) for layout details.
