@@ -28,17 +28,22 @@ https://github.com/user-attachments/assets/7ba7f0f6-4d0b-4cc2-9937-de5ad766fea4
 - Automates Amazon Seller Central sign-in with two-factor authentication (OTP)
 - Collects key performance metrics for multiple stores from `urls.csv`
 - Submits data to Google Forms for aggregation in Google Sheets
-- Supports configurable date/time range selection (today, relative, custom)
+- **Flexible date filtering**: Today, Yesterday, Last 7/30 days, Week-to-Date, or custom ranges
+- **Smart defaults**: Performance dashboard uses today's data; configurable via CLI or workflows
 
-### 📊 **Intelligent INF Analysis**
+### 📊 **Enhanced INF Analysis**
 - Automatically identifies bottom 10 stores by INF rate for deep-dive analysis
-- Extracts top 10 problematic items per store from INF dashboard
+- **Configurable depth**: Show top 5, 10, or 25 items per store (via workflow or `--top-n` CLI)
 - Displays product images, SKU details, and INF occurrence counts
-- **NEW**: Enhanced reports with higher resolution images and QR codes
+- **Real-time enrichment**: Price, barcode (EAN), stock levels, and location data
+- **Smart alerts**: Visual warnings for discontinued/not-ranged items
+- Report titles dynamically reflect date range and timestamp
 
 ### 🏪 **Morrisons Stock Integration** 
 - Real-time stock level lookup via Morrisons API
-- Shelf location information (aisle, bay, shelf)
+- **Comprehensive data**: Stock quantity, unit, last updated timestamp
+- **Dual location tracking**: Standard shelf location + promotional displays
+- **Product details**: Barcode (EAN), price, active/discontinued status
 - Supports multi-component products with fallback SKU logic
 - Bearer token authentication with automatic refresh from GitHub Gist
 
@@ -54,7 +59,13 @@ https://github.com/user-attachments/assets/7ba7f0f6-4d0b-4cc2-9937-de5ad766fea4
   - Performance breakdown (collection time, latency, bottlenecks)
   - Detailed failure analysis by error type
 - **Smart Filtering**: Automatically excludes stores with 0 orders from reports
-- **Enhanced INF Cards**: Higher resolution product images (300px), QR codes for SKU lookup, formatted text with emojis
+- **Enhanced INF Cards**: 
+  - High-resolution product images (300px)
+  - QR codes for SKU lookup
+  - Price and barcode (EAN) display
+  - Stock levels with last updated timestamp
+  - Standard and promotional location details
+  - Visual alerts for discontinued items
 
 ### ⚙️ **Performance \u0026 Reliability**
 - Dynamic concurrency adjustment based on CPU/memory load
@@ -166,18 +177,29 @@ Logs and data are saved in the `output/` directory.
 
 ## Date Range Selection
 
-The scraper supports flexible date/time range selection:
+The scraper supports flexible date/time range selection with built-in presets and custom ranges:
 
 ### Modes
 
 1. **Today** (`--date-mode today`)
-   - Collects data for the current day
-   - Default behavior
+   - Collects data for the current day (default)
 
-2. **Relative** (`--date-mode relative --relative-days N`)
+2. **Yesterday** (`--date-mode yesterday`)
+   - Previous day's data
+
+3. **Last 7 Days** (`--date-mode last_7_days`)
+   - Rolling 7-day window
+
+4. **Last 30 Days** (`--date-mode last_30_days`)
+   - Rolling 30-day window
+
+5. **Week to Date** (`--date-mode week_to_date`)
+   - Monday (start of week) to today
+
+6. **Relative** (`--date-mode relative --relative-days N`)
    - Offset from today (e.g., `-1` for yesterday, `-7` for last week)
 
-3. **Custom** (`--date-mode custom`)
+7. **Custom** (`--date-mode custom`)
    - Specify exact start/end dates and times
    - Useful for historical data analysis
 
@@ -188,7 +210,7 @@ In `config.json`:
 ```json
 {
   "use_date_range": true,
-  "date_range_mode": "custom",
+  "date_range_mode": "yesterday",
   "custom_start_date": "01/15/2025",
   "custom_end_date": "01/20/2025",
   "custom_start_time": "12:00 AM",
@@ -305,8 +327,9 @@ See `config.example.json` for the complete configuration schema.
 After main scraper completes, the system:
 1. Identifies bottom 10 stores by INF rate
 2. Automatically launches deep-dive analysis
-3. Extracts top 10 problematic items per store
-4. Sends detailed reports to Google Chat
+3. Extracts configurable number of problematic items per store (default: top 5)
+4. Enriches with Morrisons API data (price, barcode, stock, location)
+5. Sends detailed reports to Google Chat
 
 ### Enhanced Reports
 
@@ -314,26 +337,58 @@ Each INF item card displays:
 - **Product image** (300px high-resolution)
 - **Product name** (bold)
 - **SKU** (color-coded in blue)
-- **INF occurrence count** (bold)
-- **Stock level** (if enrichment enabled)
-- **Shelf location** (if available)
-- **QR code** (scannable SKU for warehouse staff)
+- **🔢 Barcode (EAN)** - Primary product barcode
+- **💷 Price** - Current retail price (if available)
+- **⚠️ INF occurrence count** (bold)
+- **🚫 Discontinuation alert** - Visual warning for inactive products (only shown when product has no location and API confirms discontinued status)
+- **📊 Stock level** - With last updated timestamp (e.g., "8 EA (at 14:30)")
+- **📍 Standard location** - Shelf location (aisle, bay, shelf)
+- **🏷️ Promotional location** - Secondary display location (if applicable)
+- **QR code** - Scannable SKU for warehouse staff
 
-### Manual Execution
+### Configurable Depth
+
+Control how many items to show per store:
 
 ```bash
-python inf_scraper.py
+# Show top 5 items (default)
+python scraper.py --inf-only --top-n 5
+
+# Show top 10 items
+python scraper.py --inf-only --top-n 10
+
+# Show top 25 items
+python scraper.py --inf-only --top-n 25
 ```
+
+Or via GitHub Actions workflow inputs:
+- **Full INF Scrape** workflow has `top_items` dropdown (5, 10, 25)
+
+**Note**: Batch sizes adjust automatically to prevent payload errors:
+- Top 5: 10 stores/batch
+- Top 10: 7 stores/batch
+- Top 25: 3 stores/batch
 
 See [`docs/INF_REPORT_ENHANCEMENTS.md`](docs/INF_REPORT_ENHANCEMENTS.md) for layout details.
 
 ## Stock Enrichment
 
-When enabled, the scraper enriches INF data with:
+When enabled, the scraper enriches INF data with comprehensive product details from the Morrisons API:
 
-- **Stock on hand**: Current quantity (e.g., "15 CASES")
-- **Standard location**: Shelf location (e.g., "Aisle 5, Left bay 3, shelf 2")
-- **Promotional location**: Promo display location (if applicable)
+### Product Information
+- **🔢 Barcode (EAN)**: Primary product barcode for identification
+- **💷 Price**: Current retail price (if available in Price Integrity API)
+- **Status**: Active/discontinued indicator with visual alerts
+
+### Stock Data
+- **Quantity on hand**: Current stock level (e.g., "15 CASES")
+- **Unit of measure**: EA, CASES, etc.
+- **Last updated**: Timestamp of stock data (e.g., "14:30")
+
+### Location Data
+- **📍 Standard location**: Primary shelf location (e.g., "Aisle 5, Left bay 3, shelf 2")
+- **🏷️ Promotional location**: Secondary display location (if applicable)
+- **Aisle number**: For quick navigation
 
 ### Requirements
 
@@ -343,9 +398,10 @@ When enabled, the scraper enriches INF data with:
 
 ### Performance
 
-- 2-3 API calls per item
+- 3 API calls per item (Product, Stock, Price Integrity)
 - Concurrent execution via `asyncio`
 - Adds ~30-60 seconds to scraper run
+- Multi-component product support with fallback SKU logic
 
 See [`STOCK_ENRICHMENT.md`](STOCK_ENRICHMENT.md) for details.
 
@@ -366,16 +422,20 @@ See [`STOCK_ENRICHMENT.md`](STOCK_ENRICHMENT.md) for details.
 - Alphabetized store listings
 - Smart filtering (excludes 0-order stores)
 
-### Message Layout
+### INF Card Layout
 
 ```
 ┌────────────────────────────────────────┐
 │ [Product Image - 300px]                │
 │                                        │
 │ 📦 SKU: 112571916                     │
+│ 🔢 EAN: 5010525190303                 │
+│ 💷 £2.50                               │
 │ ⚠️ INF Units: 15                      │
-│ 📊 Stock: 10 CASES                    │
+│ 🚫 DISCONTINUED/NOT RANGED (if true)  │
+│ 📊 Stock: 10 EA (at 14:30)            │
 │ 📍 Aisle 5, Left bay 3, shelf 2       │
+│ 🏷️ Aisle 95, Bay RE2, shelf 4        │
 │                                        │
 │ [QR Code]                              │
 │ Scan to lookup SKU                     │
