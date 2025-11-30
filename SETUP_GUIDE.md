@@ -75,39 +75,19 @@ In `.github/workflows/run-scraper.yml`, update the Build runtime config step:
 
 ### 5. Test It!
 
-**Option A: Quick Test (curl)**
-```bash
-export APPS_SCRIPT_URL="YOUR_URL_HERE"
+**Option A: Quick Test (Browser)**
+Open this URL in your browser (replace with your actual URL):
+`YOUR_APPS_SCRIPT_URL?event_type=run-inf-analysis&date_mode=today`
 
-curl -X POST "$APPS_SCRIPT_URL" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": {"text": "help"}
-  }'
-```
-
-**Expected:** JSON response with help text
+**Expected:**
+- A page saying "✅ Workflow Triggered!"
+- A new workflow run starting in GitHub Actions
 
 **Option B: Test Button Click**
-```bash
-curl -X POST "$APPS_SCRIPT_URL" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "CARD_CLICKED",
-    "action": {
-      "parameters": [
-        {"key": "event_type", "value": "run-inf-analysis"},
-        {"key": "date_mode", "value": "today"},
-        {"key": "top_n", "value": "5"}
-      ]
-    },
-    "message": {
-      "sender": {"displayName": "Test User"}
-    }
-  }'
-```
-
-**Expected:** Success card JSON + workflow starts in GitHub Actions
+1. Run the scraper workflow manually.
+2. Wait for the Job Summary card.
+3. Click a button.
+4. A new browser tab should open, trigger the workflow, and auto-close after 3 seconds.
 
 ---
 
@@ -170,11 +150,11 @@ Before going live, make sure:
 
 - [ ] GitHub PAT created with Actions permissions
 - [ ] PAT stored in Apps Script Properties as `GH_PAT`
-- [ ] Apps Script deployed as web app
+- [ ] Apps Script deployed as web app (Access: "Everyone within Morrisons" or "Anyone")
 - [ ] Apps Script URL copied
 - [ ] `APPS_SCRIPT_WEBHOOK_URL` secret added to GitHub
 - [ ] Workflow updated to use the secret in config.json
-- [ ] Tested with curl (both Phase 1 and Phase 2 from testing guide)
+- [ ] Tested via browser URL (Option A)
 - [ ] Main workflow ran successfully and posted Job Summary card
 - [ ] Job Summary card shows Quick Actions section with 4 buttons
 
@@ -213,9 +193,10 @@ The system is designed to be:
 - Check: Look at workflow logs for the config.json content
 
 **Problem:** Buttons don't work when clicked
+- Check: Does the browser tab open?
+- Check: Does the page say "Workflow Triggered"?
 - Check: Apps Script execution logs (Apps Script → Executions tab)
 - Check: Is PAT still valid?
-- Test: Use curl to verify Apps Script works
 
 **Problem:** Workflow doesn't start
 - Check: GitHub Actions tab for new runs

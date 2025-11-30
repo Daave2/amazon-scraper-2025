@@ -13,6 +13,7 @@ from asyncio import Queue, Lock, Condition
 from playwright.async_api import async_playwright, Page, TimeoutError, expect, Browser
 import qrcode
 from pytz import timezone
+import urllib.parse
 
 # Import modules
 from utils import setup_logging, sanitize_store_name, _save_screenshot, load_default_data, ensure_storage_state, LOCAL_TIMEZONE
@@ -304,6 +305,11 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
         
         # Add Quick Actions if Apps Script URL is available
         if APPS_SCRIPT_URL:
+            # Helper to build URL
+            def build_trigger_url(event_type, date_mode, top_n_val):
+                params = {'event_type': event_type, 'date_mode': date_mode, 'top_n': top_n_val}
+                return f"{APPS_SCRIPT_URL}?{urllib.parse.urlencode(params)}"
+
             sections_network.append({
                 "header": "⚡ Quick Actions",
                 "widgets": [
@@ -313,26 +319,16 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                                 {
                                     "text": "🔄 Re-run Analysis (Today)",
                                     "onClick": {
-                                        "action": {
-                                            "function": "triggerWorkflow",
-                                            "parameters": [
-                                                {"key": "event_type", "value": "run-inf-analysis"},
-                                                {"key": "date_mode", "value": "today"},
-                                                {"key": "top_n", "value": str(top_n)}
-                                            ]
+                                        "openLink": {
+                                            "url": build_trigger_url("run-inf-analysis", "today", str(top_n))
                                         }
                                     }
                                 },
                                 {
                                     "text": "📅 Yesterday's Report",
                                     "onClick": {
-                                        "action": {
-                                            "function": "triggerWorkflow",
-                                            "parameters": [
-                                                {"key": "event_type", "value": "run-inf-analysis"},
-                                                {"key": "date_mode", "value": "yesterday"},
-                                                {"key": "top_n", "value": str(top_n)}
-                                            ]
+                                        "openLink": {
+                                            "url": build_trigger_url("run-inf-analysis", "yesterday", str(top_n))
                                         }
                                     }
                                 }

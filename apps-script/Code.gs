@@ -28,86 +28,61 @@ const GITHUB_API_BASE = 'https://api.github.com';
 
 /**
  * Main entry point for Google Chat webhook
- * Handles both card interactions and simple message commands
+ * Handles GET requests from "openLink" buttons
  */
 function doGet(e) {
-  return HtmlService.createHtmlOutput("Amazon Scraper Bot is active and running! 🚀");
+  try {
+    const params = e.parameter;
+    const eventType = params.event_type;
+    
+    if (!eventType) {
+      return HtmlService.createHtmlOutput("❌ Error: Missing event_type parameter.");
+    }
+    
+    const dateMode = params.date_mode || 'today';
+    const topN = params.top_n || '5';
+    const sender = Session.getActiveUser().getEmail(); // Securely get user email
+    
+    Logger.log(`GET Trigger: ${eventType}, date_mode: ${dateMode}, requested by: ${sender}`);
+    
+    // Build client payload
+    const payload = {
+      date_mode: dateMode,
+      requested_by: sender,
+      source: 'google-chat-link',
+      top_n: eventType === 'run-inf-analysis' ? parseInt(topN) : undefined
+    };
+    
+    // Trigger GitHub workflow
+    const result = triggerGitHubWorkflow(eventType, payload);
+    
+    if (result.success) {
+      return HtmlService.createHtmlOutput(`
+        <div style="font-family: sans-serif; text-align: center; padding-top: 50px;">
+          <h1>✅ Workflow Triggered!</h1>
+          <p><b>${getWorkflowDisplayName(eventType)}</b> is now running.</p>
+          <p>Requested by: ${sender}</p>
+          <p>You can close this tab now.</p>
+          <script>setTimeout(function(){ window.close(); }, 3000);</script>
+        </div>
+      `);
+    } else {
+      return HtmlService.createHtmlOutput(`
+        <div style="font-family: sans-serif; text-align: center; padding-top: 50px; color: red;">
+          <h1>❌ Trigger Failed</h1>
+          <p>Error: ${result.error}</p>
+        </div>
+      `);
+    }
+    
+  } catch (error) {
+    return HtmlService.createHtmlOutput("❌ Error: " + error.message);
+  }
 }
 
 function doPost(e) {
-  try {
-    // Parse the request
-    const body = JSON.parse(e.postData.contents || '{}');
-    
-    Logger.log('Received request: ' + JSON.stringify(body));
-    
-    // Extract user info
-    const sender = body.message?.sender?.displayName || body.user?.displayName || 'Unknown';
-    const spaceName = body.space?.displayName || 'Unknown Space';
-    
-    // Check for card click action
-    if (body.type === 'CARD_CLICKED' && body.action) {
-      return handleCardClick(body.action, sender, spaceName);
-    }
-    
-    // Check for text command (e.g., "run inf analysis")
-    if (body.message?.text) {
-      return handleTextCommand(body.message.text, sender, spaceName);
-    }
-    
-    // Unknown request type
-    return buildJsonResponse({
-      text: '❓ Sorry, I didn\'t understand that request.'
-    });
-    
-  } catch (error) {
-    Logger.log('Error in doPost: ' + error);
-    return buildJsonResponse({
-      text: '❌ Error: ' + error.message
-    });
-  }
-}
-
-/**
- * Handle card button click events
- */
-function handleCardClick(action, sender, spaceName) {
-  const params = action.parameters || [];
-  
-  // Extract parameters
-  const eventType = getParameter(params, 'event_type');
-  const dateMode = getParameter(params, 'date_mode') || 'today';
-  const topN = getParameter(params, 'top_n') || '5';
-  
-  if (!eventType) {
-    return buildJsonResponse({
-      text: '❌ Missing event_type parameter'
-    });
-  }
-  
-  Logger.log(`Button clicked: ${eventType}, date_mode: ${dateMode}, requested by: ${sender}`);
-  
-  // Build client payload
-  const payload = {
-    date_mode: dateMode,
-    requested_by: sender,
-    source: 'google-chat',
-    space: spaceName
-  };
-  
-  // Add top_n for INF analysis
-  if (eventType === 'run-inf-analysis' && topN) {
-    payload.top_n = parseInt(topN);
-  }
-  
-  // Trigger GitHub workflow
-  const result = triggerGitHubWorkflow(eventType, payload);
-  
-  if (result.success) {
-    return buildSuccessResponse(eventType, dateMode, sender);
-  } else {
-    return buildErrorResponse(eventType, result.error);
-  }
+  // Keep doPost for health checks or future Chat App integration
+  return ContentService.createTextOutput("POST requests active");
 }
 
 /**

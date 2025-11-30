@@ -14,6 +14,7 @@ import csv
 import io
 from datetime import datetime
 from typing import List, Dict
+import urllib.parse
 
 # Google Chat Colors (Used for Performance Highlights)
 COLOR_RED = "#C62828"   # Dark Red
@@ -230,6 +231,12 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
 
         # --- Section 3: Quick Actions (if Apps Script URL is configured) ---
         if apps_script_url:
+            # Helper to build URL
+            def build_trigger_url(event_type, date_mode, top_n=None):
+                params = {'event_type': event_type, 'date_mode': date_mode}
+                if top_n: params['top_n'] = top_n
+                return f"{apps_script_url}?{urllib.parse.urlencode(params)}"
+
             quick_actions_widgets = [
                 {"textParagraph": {"text": "<b>🚀 Trigger On-Demand Reports</b>\n\nClick a button below to run additional analysis:"}},
                 {
@@ -238,25 +245,16 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
                             {
                                 "text": "🔍 Run INF Analysis (Today)",
                                 "onClick": {
-                                    "action": {
-                                        "function": "triggerWorkflow",
-                                        "parameters": [
-                                            {"key": "event_type", "value": "run-inf-analysis"},
-                                            {"key": "date_mode", "value": "today"},
-                                            {"key": "top_n", "value": "5"}
-                                        ]
+                                    "openLink": {
+                                        "url": build_trigger_url("run-inf-analysis", "today", "5")
                                     }
                                 }
                             },
                             {
                                 "text": "📊 Performance Check",
                                 "onClick": {
-                                    "action": {
-                                        "function": "triggerWorkflow",
-                                        "parameters": [
-                                            {"key": "event_type", "value": "run-performance-check"},
-                                            {"key": "date_mode", "value": "today"}
-                                        ]
+                                    "openLink": {
+                                        "url": build_trigger_url("run-performance-check", "today")
                                     }
                                 }
                             }
@@ -269,26 +267,16 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
                             {
                                 "text": "📅 Yesterday's INF Report",
                                 "onClick": {
-                                    "action": {
-                                        "function": "triggerWorkflow",
-                                        "parameters": [
-                                            {"key": "event_type", "value": "run-inf-analysis"},
-                                            {"key": "date_mode", "value": "yesterday"},
-                                            {"key": "top_n", "value": "5"}
-                                        ]
+                                    "openLink": {
+                                        "url": build_trigger_url("run-inf-analysis", "yesterday", "5")
                                     }
                                 }
                             },
                             {
                                 "text": "📊 Top 10 INF Items",
                                 "onClick": {
-                                    "action": {
-                                        "function": "triggerWorkflow",
-                                        "parameters": [
-                                            {"key": "event_type", "value": "run-inf-analysis"},
-                                            {"key": "date_mode", "value": "today"},
-                                            {"key": "top_n", "value": "10"}
-                                        ]
+                                    "openLink": {
+                                        "url": build_trigger_url("run-inf-analysis", "today", "10")
                                     }
                                 }
                             }
@@ -399,6 +387,10 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
         if sections:
             # Add Quick Action button if Apps Script URL is available
             if apps_script_url:
+                # Helper to build URL (redefined here as it's a separate function scope)
+                params = {'event_type': 'run-performance-check', 'date_mode': 'today'}
+                trigger_url = f"{apps_script_url}?{urllib.parse.urlencode(params)}"
+
                 sections.append({
                     "widgets": [
                         {
@@ -406,12 +398,8 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
                                 "buttons": [{
                                     "text": "🔄 Re-run Performance Check",
                                     "onClick": {
-                                        "action": {
-                                            "function": "triggerWorkflow",
-                                            "parameters": [
-                                                {"key": "event_type", "value": "run-performance-check"},
-                                                {"key": "date_mode", "value": "today"}
-                                            ]
+                                        "openLink": {
+                                            "url": trigger_url
                                         }
                                     }
                                 }]
