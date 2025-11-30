@@ -264,30 +264,54 @@ async def post_quick_actions_card(chat_webhook_url: str, apps_script_url: str, d
             return f"{apps_script_url}?{urllib.parse.urlencode(params)}"
 
         quick_actions_widgets = [
-            {"textParagraph": {"text": "<b>🚀 Trigger On-Demand Reports</b>\n\nClick a button below to run additional analysis:"}},
+            {"textParagraph": {"text": "<b>🚀 Trigger On-Demand Reports</b>"}},
+            
+            # INF Analysis Today
+            {"textParagraph": {"text": "<b>🔍 INF Analysis (Today)</b><br>Detailed breakdown of 'Item Not Found' occurrences for all stores today."}},
             {
                 "buttonList": {
                     "buttons": [
                         {
-                            "text": "🔍 Run INF Analysis (Today)",
+                            "text": "Run INF Analysis",
                             "onClick": {"openLink": {"url": build_trigger_url("run-inf-analysis", "today", "5")}}
-                        },
+                        }
+                    ]
+                }
+            },
+            
+            # Performance Check
+            {"textParagraph": {"text": "<b>📊 Performance Check</b><br>Overview of 'Lates', 'UPH', and key metrics for the current shift."}},
+            {
+                "buttonList": {
+                    "buttons": [
                         {
-                            "text": "📊 Performance Check",
+                            "text": "Run Performance Check",
                             "onClick": {"openLink": {"url": build_trigger_url("run-performance-check", "today")}}
                         }
                     ]
                 }
             },
+            
+            # Yesterday's Report
+            {"textParagraph": {"text": "<b>📅 Yesterday's INF Report</b><br>Retrospective analysis of yesterday's INF data."}},
             {
                 "buttonList": {
                     "buttons": [
                         {
-                            "text": "📅 Yesterday's INF Report",
+                            "text": "Run Yesterday's Report",
                             "onClick": {"openLink": {"url": build_trigger_url("run-inf-analysis", "yesterday", "5")}}
-                        },
+                        }
+                    ]
+                }
+            },
+            
+            # Top 10 Items
+            {"textParagraph": {"text": "<b>📈 Top 10 INF Items</b><br>Expanded view showing the top 10 most missing items network-wide."}},
+            {
+                "buttonList": {
+                    "buttons": [
                         {
-                            "text": "📊 Top 10 INF Items",
+                            "text": "Show Top 10",
                             "onClick": {"openLink": {"url": build_trigger_url("run-inf-analysis", "today", "10")}}
                         }
                     ]
