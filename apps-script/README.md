@@ -145,6 +145,12 @@ You can also type these in Google Chat:
 - "run full scrape" - Runs full scraper
 - "help" - Shows available commands
 
+## ⏱️ Cooldown Protection
+
+- Button clicks and text commands are rate-limited to **one trigger every 30 minutes per workflow**.
+- When a request is blocked, the response explains who triggered the last run and how long to wait.
+- This prevents duplicate executions from double-clicks or multiple users trying to start the same job simultaneously.
+
 ## 🔒 Security Notes
 
 - ✅ PAT is stored in Script Properties (not in code)
