@@ -82,6 +82,7 @@ LOGIN_URL       = config['login_url']
 CHAT_WEBHOOK_URL = config.get('chat_webhook_url')
 STORE_WEBHOOK_URL = config.get('store_webhook_url') or CHAT_WEBHOOK_URL
 PERFORMANCE_WEBHOOK_URL = config.get('performance_webhook_url') or CHAT_WEBHOOK_URL
+APPS_SCRIPT_URL = config.get('apps_script_webhook_url')  # Optional - for interactive buttons
 CHAT_BATCH_SIZE  = config.get('chat_batch_size', 100)
 STORE_PREFIX_RE  = re.compile(r"^morrisons\s*-\s*", re.I)
 
@@ -353,14 +354,15 @@ async def process_urls():
     
     # Send Job Summary
     await post_job_summary(progress['total'], progress['current'], run_failures, elapsed,
-                          PERFORMANCE_WEBHOOK_URL, metrics_lock, metrics, LOCAL_TIMEZONE, DEBUG_MODE, app_logger)
+                          PERFORMANCE_WEBHOOK_URL, metrics_lock, metrics, LOCAL_TIMEZONE, DEBUG_MODE, app_logger,
+                          APPS_SCRIPT_URL)
     
     # Send Performance Highlights & Trigger INF Deep Dive
     async with submitted_data_lock:
         if submitted_store_data:
             # 1. Send Performance Highlights
             await post_performance_highlights(submitted_store_data, PERFORMANCE_WEBHOOK_URL, sanitize_wrapper,
-                                             LOCAL_TIMEZONE, DEBUG_MODE, app_logger)
+                                             LOCAL_TIMEZONE, DEBUG_MODE, app_logger, APPS_SCRIPT_URL)
             
             # 2. Identify Bottom 5 INF Stores for Deep Dive
             app_logger.info("Identifying bottom 5 INF stores for deep dive analysis...")

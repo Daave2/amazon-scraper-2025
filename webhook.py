@@ -158,8 +158,8 @@ async def post_to_chat_webhook(entries: List[Dict[str, str]], chat_webhook_url: 
 
 async def post_job_summary(total: int, success: int, failures: List[str], duration: float,
                            chat_webhook_url: str, metrics_lock, metrics: dict, 
-                           local_timezone, debug_mode: bool, app_logger):
-    """Send a job summary with ONE main collapse."""
+                           local_timezone, debug_mode: bool, app_logger, apps_script_url: str = None):
+    """Send a job summary with ONE main collapse and Quick Actions buttons."""
     if not chat_webhook_url: return
     try:
         status_text = "✅ Job Completed Successfully"
@@ -178,6 +178,7 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
             total_units = metrics["total_units"]
             
         avg_coll = sum(t[1] for t in coll_times) / len(coll_times) if coll_times else 0
+        avg_sub = sum(t[1] for t in sub_times) / len(sub_times) if sub_times else 0
         sorted_coll = sorted([t[1] for t in coll_times])
         p95_coll = sorted_coll[int(len(sorted_coll) * 0.95)] if sorted_coll else 0
         fastest_store = min(coll_times, key=lambda x: x[1]) if coll_times else ("N/A", 0)
@@ -219,7 +220,83 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
             detailed_widgets.append({"textParagraph": {"text": "<b>Failure Analysis ⚠️</b>"}})
             failure_list = "\n".join([f"• {f}" for f in failures[:5]])
             if len(failures) > 5: failure_list += f"\n...and {len(failures) - 5} more"
-            detailed_widgets.append({"textParagraph": {"text": f"<font color=\"#FF0000\">{failure_list}</font>"}})
+            detailed_widgets.append({"textParagraph": {"text": f'<font color="#FF0000">{failure_list}</font>'}})
+
+        # Build sections list
+        sections = [
+            {"widgets": high_level_widgets},
+            {"header": "Detailed Metrics", "collapsible": True, "uncollapsibleWidgetsCount": 0, "widgets": detailed_widgets}
+        ]
+
+        # --- Section 3: Quick Actions (if Apps Script URL is configured) ---
+        if apps_script_url:
+            quick_actions_widgets = [
+                {"textParagraph": {"text": "<b>🚀 Trigger On-Demand Reports</b>\n\nClick a button below to run additional analysis:"}},
+                {
+                    "buttonList": {
+                        "buttons": [
+                            {
+                                "text": "🔍 Run INF Analysis (Today)",
+                                "onClick": {
+                                    "action": {
+                                        "function": "triggerWorkflow",
+                                        "parameters": [
+                                            {"key": "event_type", "value": "run-inf-analysis"},
+                                            {"key": "date_mode", "value": "today"},
+                                            {"key": "top_n", "value": "5"}
+                                        ]
+                                    }
+                                }
+                            },
+                            {
+                                "text": "📊 Performance Check",
+                                "onClick": {
+                                    "action": {
+                                        "function": "triggerWorkflow",
+                                        "parameters": [
+                                            {"key": "event_type", "value": "run-performance-check"},
+                                            {"key": "date_mode", "value": "today"}
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "buttonList": {
+                        "buttons": [
+                            {
+                                "text": "📅 Yesterday's INF Report",
+                                "onClick": {
+                                    "action": {
+                                        "function": "triggerWorkflow",
+                                        "parameters": [
+                                            {"key": "event_type", "value": "run-inf-analysis"},
+                                            {"key": "date_mode", "value": "yesterday"},
+                                            {"key": "top_n", "value": "5"}
+                                        ]
+                                    }
+                                }
+                            },
+                            {
+                                "text": "📊 Top 10 INF Items",
+                                "onClick": {
+                                    "action": {
+                                        "function": "triggerWorkflow",
+                                        "parameters": [
+                                            {"key": "event_type", "value": "run-inf-analysis"},
+                                            {"key": "date_mode", "value": "today"},
+                                            {"key": "top_n", "value": "10"}
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+            sections.append({"header": "⚡ Quick Actions", "widgets": quick_actions_widgets})
 
         payload = {
             "cardsV2": [{
@@ -231,10 +308,7 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
                         "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTGVrSjsDJmQGLCuVWs2Z1fOj1pTcx0ELhBA&s",
                         "imageType": "CIRCLE"
                     },
-                    "sections": [
-                        {"widgets": high_level_widgets},
-                        {"header": "Detailed Metrics", "collapsible": True, "uncollapsibleWidgetsCount": 0, "widgets": detailed_widgets}
-                    ],
+                    "sections": sections,
                 },
             }]
         }
@@ -247,7 +321,7 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
 
 
 async def post_performance_highlights(store_data: List[Dict[str, str]], chat_webhook_url: str,
-                                      sanitize_func, local_timezone, debug_mode: bool, app_logger):
+                                      sanitize_func, local_timezone, debug_mode: bool, app_logger, apps_script_url: str = None):
     """
     Send highlights using COLUMNS layout to support HTML COLORING.
     """
@@ -323,6 +397,29 @@ async def post_performance_highlights(store_data: List[Dict[str, str]], chat_web
         app_logger.info(f"Performance highlights sections to send: {len(sections)}")
         
         if sections:
+            # Add Quick Action button if Apps Script URL is available
+            if apps_script_url:
+                sections.append({
+                    "widgets": [
+                        {
+                            "buttonList": {
+                                "buttons": [{
+                                    "text": "🔄 Re-run Performance Check",
+                                    "onClick": {
+                                        "action": {
+                                            "function": "triggerWorkflow",
+                                            "parameters": [
+                                                {"key": "event_type", "value": "run-performance-check"},
+                                                {"key": "date_mode", "value": "today"}
+                                            ]
+                                        }
+                                    }
+                                }]
+                            }
+                        }
+                    ]
+                })
+
             import ssl
             import certifi
             

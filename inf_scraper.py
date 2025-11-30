@@ -35,6 +35,7 @@ except FileNotFoundError:
 DEBUG_MODE = config.get('debug', False)
 LOGIN_URL = config['login_url']
 CHAT_WEBHOOK_URL = config.get('inf_webhook_url') or config.get('chat_webhook_url')
+APPS_SCRIPT_URL = config.get('apps_script_webhook_url')  # Optional - for interactive buttons
 STORAGE_STATE = 'state.json'
 OUTPUT_DIR = 'output'
 PAGE_TIMEOUT = config.get('page_timeout_ms', 30000)
@@ -301,6 +302,46 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
             
         sections_network.append({"widgets": widgets_network})
         
+        # Add Quick Actions if Apps Script URL is available
+        if APPS_SCRIPT_URL:
+            sections_network.append({
+                "header": "⚡ Quick Actions",
+                "widgets": [
+                    {
+                        "buttonList": {
+                            "buttons": [
+                                {
+                                    "text": "🔄 Re-run Analysis (Today)",
+                                    "onClick": {
+                                        "action": {
+                                            "function": "triggerWorkflow",
+                                            "parameters": [
+                                                {"key": "event_type", "value": "run-inf-analysis"},
+                                                {"key": "date_mode", "value": "today"},
+                                                {"key": "top_n", "value": str(top_n)}
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "text": "📅 Yesterday's Report",
+                                    "onClick": {
+                                        "action": {
+                                            "function": "triggerWorkflow",
+                                            "parameters": [
+                                                {"key": "event_type", "value": "run-inf-analysis"},
+                                                {"key": "date_mode", "value": "yesterday"},
+                                                {"key": "top_n", "value": str(top_n)}
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            })
+
         payload_network = {
             "cardsV2": [{
                 "cardId": f"inf-network-{int(datetime.now().timestamp())}",
