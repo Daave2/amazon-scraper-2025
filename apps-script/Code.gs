@@ -30,6 +30,10 @@ const GITHUB_API_BASE = 'https://api.github.com';
  * Main entry point for Google Chat webhook
  * Handles both card interactions and simple message commands
  */
+function doGet(e) {
+  return HtmlService.createHtmlOutput("Amazon Scraper Bot is active and running! 🚀");
+}
+
 function doPost(e) {
   try {
     // Parse the request
