@@ -400,6 +400,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                 
                 # Text Details (Left Column)
                 details = f"<b>{item['name']}</b>\n\n"
+                details += f"🔴 <b>INF Count: {item['inf']}</b>\n"
                 details += f"📦 SKU: <font color='#1a73e8'>{sku}</font>\n"
                 
                 # Add barcode if available

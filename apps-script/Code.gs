@@ -23,7 +23,7 @@
 
 // Configuration
 const GITHUB_OWNER = 'Daave2';
-const GITHUB_REPO = 'amazon-scraper';
+const GITHUB_REPO = 'amazon-scraper-2025';
 const GITHUB_API_BASE = 'https://api.github.com';
 
 /**
