@@ -57,7 +57,7 @@ async def _wait_for_date_picker(page: Page, wait_timeout: int):
 
 
 
-async def _apply_custom_date_range(page: Page, store_name: str, date_range: dict, action_timeout: int, app_logger) -> bool:
+async def _apply_custom_date_range(page: Page, store_name: str, date_range: dict, action_timeout: int, debug_mode: bool, app_logger) -> bool:
     """Helper to apply a custom date range using inputs."""
     app_logger.info(f"[{store_name}] Applying Customised range: {date_range['start_date']} {date_range['start_time']} to {date_range['end_date']} {date_range['end_time']}")
     
@@ -98,8 +98,9 @@ async def _apply_custom_date_range(page: Page, store_name: str, date_range: dict
         # Define STORE_PREFIX_RE locally as requested
         STORE_PREFIX_RE = re.compile(r"^morrisons\s*-\s*", re.I)
         
-        # Take a debug screenshot
-        await _save_screenshot(page, f"debug_datepicker_{sanitize_store_name(store_name, STORE_PREFIX_RE)}", "output", timezone('Europe/London'), app_logger)
+        # Take a debug screenshot ONLY if debug_mode is True
+        if debug_mode:
+            await _save_screenshot(page, f"debug_datepicker_{sanitize_store_name(store_name, STORE_PREFIX_RE)}", "output", timezone('Europe/London'), app_logger)
         
         # Date inputs are type="text" within the date picker
         date_inputs = date_picker.locator('input[type="text"]')
@@ -257,7 +258,7 @@ async def apply_date_time_range(page: Page, store_name: str, get_date_range_func
             return True
             
         elif mode == 'custom':
-            return await _apply_custom_date_range(page, store_name, date_range, action_timeout, app_logger)
+            return await _apply_custom_date_range(page, store_name, date_range, action_timeout, debug_mode, app_logger)
 
     except Exception as e:
         app_logger.error(f"[{store_name}] Error applying date range: {e}", exc_info=debug_mode)
