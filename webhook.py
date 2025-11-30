@@ -229,63 +229,6 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
             {"header": "Detailed Metrics", "collapsible": True, "uncollapsibleWidgetsCount": 0, "widgets": detailed_widgets}
         ]
 
-        # --- Section 3: Quick Actions (if Apps Script URL is configured) ---
-        if apps_script_url:
-            # Helper to build URL
-            def build_trigger_url(event_type, date_mode, top_n=None):
-                params = {'event_type': event_type, 'date_mode': date_mode}
-                if top_n: params['top_n'] = top_n
-                return f"{apps_script_url}?{urllib.parse.urlencode(params)}"
-
-            quick_actions_widgets = [
-                {"textParagraph": {"text": "<b>🚀 Trigger On-Demand Reports</b>\n\nClick a button below to run additional analysis:"}},
-                {
-                    "buttonList": {
-                        "buttons": [
-                            {
-                                "text": "🔍 Run INF Analysis (Today)",
-                                "onClick": {
-                                    "openLink": {
-                                        "url": build_trigger_url("run-inf-analysis", "today", "5")
-                                    }
-                                }
-                            },
-                            {
-                                "text": "📊 Performance Check",
-                                "onClick": {
-                                    "openLink": {
-                                        "url": build_trigger_url("run-performance-check", "today")
-                                    }
-                                }
-                            }
-                        ]
-                    }
-                },
-                {
-                    "buttonList": {
-                        "buttons": [
-                            {
-                                "text": "📅 Yesterday's INF Report",
-                                "onClick": {
-                                    "openLink": {
-                                        "url": build_trigger_url("run-inf-analysis", "yesterday", "5")
-                                    }
-                                }
-                            },
-                            {
-                                "text": "📊 Top 10 INF Items",
-                                "onClick": {
-                                    "openLink": {
-                                        "url": build_trigger_url("run-inf-analysis", "today", "10")
-                                    }
-                                }
-                            }
-                        ]
-                    }
-                }
-            ]
-            sections.append({"header": "⚡ Quick Actions", "widgets": quick_actions_widgets})
-
         payload = {
             "cardsV2": [{
                 "cardId": f"job-summary-{int(datetime.now().timestamp())}",
@@ -306,6 +249,74 @@ async def post_job_summary(total: int, success: int, failures: List[str], durati
 
     except Exception as e:
         app_logger.error(f"Error posting job summary: {e}", exc_info=debug_mode)
+
+
+async def post_quick_actions_card(chat_webhook_url: str, apps_script_url: str, debug_mode: bool, app_logger):
+    """Send the Quick Actions card separately so it always posts last."""
+    if not chat_webhook_url or not apps_script_url:
+        return
+
+    try:
+        def build_trigger_url(event_type, date_mode, top_n=None):
+            params = {'event_type': event_type, 'date_mode': date_mode}
+            if top_n:
+                params['top_n'] = top_n
+            return f"{apps_script_url}?{urllib.parse.urlencode(params)}"
+
+        quick_actions_widgets = [
+            {"textParagraph": {"text": "<b>🚀 Trigger On-Demand Reports</b>\n\nClick a button below to run additional analysis:"}},
+            {
+                "buttonList": {
+                    "buttons": [
+                        {
+                            "text": "🔍 Run INF Analysis (Today)",
+                            "onClick": {"openLink": {"url": build_trigger_url("run-inf-analysis", "today", "5")}}
+                        },
+                        {
+                            "text": "📊 Performance Check",
+                            "onClick": {"openLink": {"url": build_trigger_url("run-performance-check", "today")}}
+                        }
+                    ]
+                }
+            },
+            {
+                "buttonList": {
+                    "buttons": [
+                        {
+                            "text": "📅 Yesterday's INF Report",
+                            "onClick": {"openLink": {"url": build_trigger_url("run-inf-analysis", "yesterday", "5")}}
+                        },
+                        {
+                            "text": "📊 Top 10 INF Items",
+                            "onClick": {"openLink": {"url": build_trigger_url("run-inf-analysis", "today", "10")}}
+                        }
+                    ]
+                }
+            }
+        ]
+
+        payload = {
+            "cardsV2": [{
+                "cardId": f"quick-actions-{int(datetime.now().timestamp())}",
+                "card": {
+                    "header": {
+                        "title": "⚡ Quick Actions",
+                        "subtitle": "Run additional reports and checks",
+                        "imageUrl": "https://static.vecteezy.com/system/resources/previews/006/724/659/non_2x/bar-chart-logo-icon-sign-symbol-design-vector.jpg",
+                        "imageType": "CIRCLE"
+                    },
+                    "sections": [
+                        {"widgets": quick_actions_widgets}
+                    ],
+                },
+            }]
+        }
+
+        async with aiohttp.ClientSession() as session:
+            await session.post(chat_webhook_url, json=payload)
+
+    except Exception as e:
+        app_logger.error(f"Error posting quick actions card: {e}", exc_info=debug_mode)
 
 
 async def post_performance_highlights(store_data: List[Dict[str, str]], chat_webhook_url: str,

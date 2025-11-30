@@ -22,7 +22,7 @@ from utils import setup_logging, sanitize_store_name, _save_screenshot, load_def
 from auth import check_if_login_needed, perform_login_and_otp, prime_master_session
 from date_range import get_date_time_range_from_config, apply_date_time_range
 from webhook import (post_to_chat_webhook, post_job_summary, post_performance_highlights,
-                    add_to_pending_chat, flush_pending_chat_entries, log_submission)
+                    post_quick_actions_card, add_to_pending_chat, flush_pending_chat_entries, log_submission)
 from workers import auto_concurrency_manager, http_form_submitter_worker, process_single_store, worker_task
 from inf_scraper import run_inf_analysis
 
@@ -412,6 +412,9 @@ async def process_urls():
                 app_logger.error(f"Failed to run INF analysis: {e}", exc_info=True)
 
             submitted_store_data.clear()
+
+    # Send Quick Actions card last so buttons are always at the bottom of the thread
+    await post_quick_actions_card(PERFORMANCE_WEBHOOK_URL, APPS_SCRIPT_URL, DEBUG_MODE, app_logger)
 
     if run_failures:
         app_logger.warning(f"Completed with {len(run_failures)} issue(s): {', '.join(run_failures)}")
