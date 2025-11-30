@@ -43,8 +43,6 @@ on:
   repository_dispatch:
     types:
       - run-full-scrape        # Full scraper run with all stores
-      - run-inf-analysis       # INF deep dive analysis
-      - run-performance-check  # Performance highlights only
 
 # Abort an older run of the same branch if a new one starts
 concurrency:
