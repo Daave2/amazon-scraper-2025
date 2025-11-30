@@ -25,6 +25,8 @@
 const GITHUB_OWNER = 'Daave2';
 const GITHUB_REPO = 'amazon-scraper-2025';
 const GITHUB_API_BASE = 'https://api.github.com';
+const COOLDOWN_MINUTES = 30; // Prevent duplicate runs within this window
+const COOLDOWN_MS = COOLDOWN_MINUTES * 60 * 1000;
 
 /**
  * Main entry point for Google Chat webhook
@@ -52,10 +54,10 @@ function doGet(e) {
       source: 'google-chat-link',
       top_n: eventType === 'run-inf-analysis' ? parseInt(topN) : undefined
     };
-    
+
     // Trigger GitHub workflow
     const result = triggerGitHubWorkflow(eventType, payload);
-    
+
     if (result.success) {
       return HtmlService.createHtmlOutput(`
         <div style="font-family: sans-serif; text-align: center; padding-top: 50px;">
@@ -66,14 +68,26 @@ function doGet(e) {
           <script>setTimeout(function(){ window.close(); }, 3000);</script>
         </div>
       `);
-    } else {
+    }
+
+    if (result.cooldownActive) {
+      const { remainingMinutes, lastRequestedBy } = result.cooldownInfo;
       return HtmlService.createHtmlOutput(`
-        <div style="font-family: sans-serif; text-align: center; padding-top: 50px; color: red;">
-          <h1>❌ Trigger Failed</h1>
-          <p>Error: ${result.error}</p>
+        <div style="font-family: sans-serif; text-align: center; padding-top: 50px; color: #c97a00;">
+          <h1>⚠️ Workflow Already Requested</h1>
+          <p><b>${getWorkflowDisplayName(eventType)}</b> was triggered recently.</p>
+          <p>Requested by: ${lastRequestedBy || 'someone else'}</p>
+          <p>Please wait ~${remainingMinutes} minute(s) before trying again.</p>
         </div>
       `);
     }
+
+    return HtmlService.createHtmlOutput(`
+      <div style="font-family: sans-serif; text-align: center; padding-top: 50px; color: red;">
+        <h1>❌ Trigger Failed</h1>
+        <p>Error: ${result.error}</p>
+      </div>
+    `);
     
   } catch (error) {
     return HtmlService.createHtmlOutput("❌ Error: " + error.message);
@@ -138,7 +152,24 @@ function handleTextCommand(text, sender, spaceName) {
  * Trigger GitHub workflow via repository_dispatch API
  */
 function triggerGitHubWorkflow(eventType, clientPayload) {
+  let lock;
   try {
+    lock = LockService.getScriptLock();
+    lock.waitLock(5000);
+
+    const cooldownStatus = getCooldownStatus(eventType);
+    if (cooldownStatus.active) {
+      return {
+        success: false,
+        cooldownActive: true,
+        cooldownInfo: {
+          remainingMinutes: cooldownStatus.remainingMinutes,
+          lastRequestedBy: cooldownStatus.lastRequestedBy
+        },
+        error: cooldownStatus.message
+      };
+    }
+
     // Get GitHub PAT from Script Properties
     const token = PropertiesService.getScriptProperties().getProperty('GH_PAT');
     
@@ -175,17 +206,76 @@ function triggerGitHubWorkflow(eventType, clientPayload) {
     
     if (responseCode === 204) {
       // Success - repository_dispatch returns 204 No Content
+      recordTrigger(eventType, clientPayload.requested_by);
       return { success: true };
     } else {
       const errorText = response.getContentText();
       Logger.log('GitHub API error: ' + errorText);
       return { success: false, error: `API returned ${responseCode}: ${errorText}` };
     }
-    
+
   } catch (error) {
     Logger.log('Error triggering workflow: ' + error);
     return { success: false, error: error.message };
+  } finally {
+    if (lock) {
+      try {
+        lock.releaseLock();
+      } catch (releaseError) {
+        Logger.log('Error releasing lock: ' + releaseError);
+      }
+    }
   }
+}
+
+/**
+ * Determine if the workflow is on cooldown
+ */
+function getCooldownStatus(eventType) {
+  const props = PropertiesService.getScriptProperties();
+  const key = `LAST_TRIGGER_${eventType}`;
+  const raw = props.getProperty(key);
+
+  if (!raw) {
+    return { active: false };
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    const lastTimestamp = parsed.timestamp;
+    const lastRequestedBy = parsed.requested_by;
+    const now = Date.now();
+    const elapsed = now - lastTimestamp;
+
+    if (elapsed < COOLDOWN_MS) {
+      const remainingMs = COOLDOWN_MS - elapsed;
+      const remainingMinutes = Math.ceil(remainingMs / (60 * 1000));
+      return {
+        active: true,
+        remainingMinutes,
+        lastRequestedBy,
+        message: `Workflow recently triggered by ${lastRequestedBy || 'someone else'}. Wait ${remainingMinutes} minute(s).`
+      };
+    }
+  } catch (error) {
+    Logger.log('Error parsing cooldown state: ' + error);
+  }
+
+  return { active: false };
+}
+
+/**
+ * Record the last trigger time for cooldown enforcement
+ */
+function recordTrigger(eventType, requestedBy) {
+  const props = PropertiesService.getScriptProperties();
+  const key = `LAST_TRIGGER_${eventType}`;
+  const payload = {
+    timestamp: Date.now(),
+    requested_by: requestedBy
+  };
+
+  props.setProperty(key, JSON.stringify(payload));
 }
 
 /**
