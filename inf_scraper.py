@@ -740,6 +740,11 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         top_n = active_config.get('top_n_items', 5)  # Default to 5 if not specified
         await send_inf_report(results_list, network_top_10, skip_network_report=skip_network, title_prefix=title_prefix, top_n=top_n)
         
+        # Send Quick Actions card if not skipped (i.e., standalone run)
+        if not skip_network and APPS_SCRIPT_URL:
+            from webhook import post_quick_actions_card
+            await post_quick_actions_card(CHAT_WEBHOOK_URL, APPS_SCRIPT_URL, DEBUG_MODE, app_logger)
+        
     finally:
         if local_playwright:
             if browser: await browser.close()

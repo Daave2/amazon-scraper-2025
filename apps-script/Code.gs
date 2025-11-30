@@ -176,7 +176,51 @@ function triggerGitHubWorkflow(eventType, clientPayload) {
     if (!token) {
       throw new Error('GitHub PAT not configured in Script Properties');
     }
-    
+
+    // --- NEW: Send Acknowledgement to Google Chat ---
+    // This lets everyone know who triggered what
+    try {
+      const webhookUrl = PropertiesService.getScriptProperties().getProperty('CHAT_WEBHOOK_URL');
+      if (webhookUrl) {
+        const workflowName = getWorkflowDisplayName(eventType);
+        const requestor = clientPayload.requested_by || 'Unknown User';
+        
+        const ackPayload = {
+          cardsV2: [{
+            cardId: `ack-${Date.now()}`,
+            card: {
+              header: {
+                title: '⏳ Workflow Started',
+                subtitle: `${workflowName}`,
+                imageUrl: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png',
+                imageType: 'CIRCLE'
+              },
+              sections: [{
+                widgets: [
+                  {
+                    textParagraph: {
+                      text: `<b>${requestor}</b> has requested a report.<br>Running now, please wait...`
+                    }
+                  }
+                ]
+              }]
+            }
+          }]
+        };
+        
+        UrlFetchApp.fetch(webhookUrl, {
+          method: 'post',
+          contentType: 'application/json',
+          payload: JSON.stringify(ackPayload),
+          muteHttpExceptions: true
+        });
+      }
+    } catch (e) {
+      Logger.log('Failed to send ack to chat: ' + e);
+      // Don't fail the whole trigger just because ack failed
+    }
+    // ------------------------------------------------
+
     const url = `${GITHUB_API_BASE}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/dispatches`;
     
     const payload = JSON.stringify({
