@@ -62,10 +62,19 @@ https://github.com/user-attachments/assets/7ba7f0f6-4d0b-4cc2-9937-de5ad766fea4
 - **Enhanced INF Cards**: 
   - High-resolution product images (300px)
   - QR codes for SKU lookup
-  - Price and barcode (EAN) display
+  - Price and SKU display
   - Stock levels with last updated timestamp
   - Standard and promotional location details
   - Visual alerts for discontinued items
+  - **Network-wide summary** showing top 3 contributing stores per problem item
+
+### 🚀 **On-Demand Triggers**
+- **Quick Actions buttons** in Google Chat for instant report generation
+- Trigger any report on-demand via Apps Script integration
+- **30-minute cooldown protection** prevents accidental duplicate runs
+- **Instant acknowledgement** cards show who requested what
+- **Simplified schedule**: 3 daily automated runs (8 AM, 12 PM, 2 PM)
+- See [`docs/ON_DEMAND_TRIGGERS.md`](docs/ON_DEMAND_TRIGGERS.md) for setup and usage
 
 ### ⚙️ **Performance \u0026 Reliability**
 - Dynamic concurrency adjustment based on CPU/memory load
@@ -224,12 +233,21 @@ Command-line arguments override config settings. See [`DATE_RANGE_FEATURE.md`](D
 
 ### Automated Scheduling
 
-The workflow in `.github/workflows/run-scraper.yml`:
+The project now uses specialized workflows for different report types:
 
-- Runs every hour via cron schedule
-- Checks current UK time against `UK_TARGET_HOURS`
-- Only executes at specified times (e.g., 09:00, 12:00, 14:00, 17:00, 20:00)
-- Can be triggered manually via "Actions" tab
+**Daily Automated Reports:**
+- **8 AM UK Time** (`yesterday-report.yml`) - Yesterday's full INF analysis
+- **12 PM UK Time** (`midday-performance.yml`) - Current day performance check
+- **2 PM UK Time** (`afternoon-inf.yml`) - Today's INF analysis (so far)
+
+**On-Demand Reports:**
+All other reports can be triggered via **Quick Actions buttons** in Google Chat:
+- INF Analysis (Today) - Top 10 items per store
+- Performance Check - Lates, UPH, and key metrics
+- Yesterday's INF Report - Top 10 items from yesterday
+- Week-to-Date INF - Monday through today summary
+
+See [`docs/ON_DEMAND_TRIGGERS.md`](docs/ON_DEMAND_TRIGGERS.md) for setup and usage.
 
 ### Required Secrets
 
@@ -241,7 +259,8 @@ Configure these in **Settings → Secrets and variables → Actions**:
 - `LOGIN_EMAIL` - Your Amazon account email
 - `LOGIN_PASSWORD` - Your Amazon account password
 - `OTP_SECRET_KEY` - TOTP secret for 2FA
-- `CHAT_WEBHOOK_URL` - Google Chat webhook URL
+- `CHAT_WEBHOOK_URL` - Google Chat webhook URL  
+- `APPS_SCRIPT_WEBHOOK_URL` - Apps Script deployment URL (for on-demand triggers)
 - `MORRISONS_API_KEY` - Morrisons API key
 - `MORRISONS_BEARER_TOKEN_URL` - URL to fetch Morrisons bearer token (e.g., GitHub Gist)
 

@@ -93,8 +93,8 @@ jobs:
         if_no_artifact_found: warn
         search_artifacts: true
 
-    - name: Run scraper (yesterday's data)
-      run: python scraper.py --date-mode relative --relative-days -1 --start-time "12:00 AM" --end-time "11:59 PM"
+    - name: Run INF scraper (yesterday's data)
+      run: python inf_scraper.py --date-mode yesterday
 
 
     - name: Upload artifacts on failure or success

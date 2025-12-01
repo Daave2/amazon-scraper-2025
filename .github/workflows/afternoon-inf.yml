@@ -1,18 +1,17 @@
-name: Week-to-Date Report
+name: 2 PM INF Report
 
 # ==============================================================================
 # ─── PURPOSE ──────────────────────────────────────────────────────────────────
-# This workflow runs to collect WEEK-TO-DATE data (Monday through today)
-# Useful for weekly performance analysis and trending
+# This workflow runs automatically at 2 PM to check today's INF so far
 # ==============================================================================
 
 on:
   # Manual trigger
   workflow_dispatch:
   
-  # Scheduled: DISABLED - now available via on-demand button
-  # schedule:
-  #   - cron: '0 20 * * 1-5'  # 8 PM UTC Mon-Fri
+  # Scheduled: Run at 2 PM UK time every day
+  schedule:
+    - cron: '0 14 * * *'  # 2 PM UTC = 2 PM UK
 
 # Abort an older run if a new one starts
 concurrency:
@@ -23,7 +22,7 @@ env:
   PYTHON_VERSION: '3.11'
 
 jobs:
-  scrape-week-to-date:
+  afternoon-inf:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -51,32 +50,28 @@ jobs:
 
     - name: Build runtime config from Secrets
       env:
-        FORM_URL:        ${{ secrets.FORM_URL }}
         LOGIN_URL:       ${{ secrets.LOGIN_URL }}
         SECRET_KEY:      ${{ secrets.SECRET_KEY }}
         LOGIN_EMAIL:     ${{ secrets.LOGIN_EMAIL }}
         LOGIN_PASSWORD:  ${{ secrets.LOGIN_PASSWORD }}
         OTP_SECRET_KEY:  ${{ secrets.OTP_SECRET_KEY }}
         CHAT_WEBHOOK_URL: ${{ secrets.CHAT_WEBHOOK_URL }}
+        APPS_SCRIPT_WEBHOOK_URL: ${{ secrets.APPS_SCRIPT_WEBHOOK_URL }}
         MORRISONS_API_KEY: ${{ secrets.MORRISONS_API_KEY }}
         MORRISONS_BEARER_TOKEN_URL: ${{ secrets.MORRISONS_BEARER_TOKEN_URL }}
       run: |
         cat > config.json <<JSON
         {
           "debug": false,
-          "form_url":        "${FORM_URL}",
           "login_url":       "${LOGIN_URL}",
           "secret_key":      "${SECRET_KEY}",
           "login_email":     "${LOGIN_EMAIL}",
           "login_password":  "${LOGIN_PASSWORD}",
           "otp_secret_key":  "${OTP_SECRET_KEY}",
           "chat_webhook_url": "${CHAT_WEBHOOK_URL}",
-          "max_concurrency": 55,
-          "initial_concurrency": 30,
-          "num_form_submitters": 2,
+          "apps_script_webhook_url": "${APPS_SCRIPT_WEBHOOK_URL}",
           "page_timeout_ms": 90000,
           "element_wait_timeout_ms": 20000,
-          "auto_concurrency": { "enabled": true },
           "use_date_range": false,
           "morrisons_api_key": "${MORRISONS_API_KEY}",
           "morrisons_bearer_token_url": "${MORRISONS_BEARER_TOKEN_URL}",
@@ -93,33 +88,15 @@ jobs:
         if_no_artifact_found: warn
         search_artifacts: true
 
-    - name: Calculate week-to-date range and run scraper
-      run: |
-        # Calculate Monday of current week (week starts Monday)
-        # Use GNU date if available (Linux), otherwise BSD date (macOS)
-        if date --version >/dev/null 2>&1; then
-          # GNU date (Linux)
-          START_DATE=$(TZ="Europe/London" date -d "monday" +"%m/%d/%Y")
-        else
-          # BSD date (macOS) - this shouldn't run in GitHub Actions but included for completeness
-          START_DATE=$(TZ="Europe/London" date -v-mon +"%m/%d/%Y")
-        fi
-        
-        END_DATE=$(TZ="Europe/London" date +"%m/%d/%Y")
-        
-        echo "Week-to-date range: $START_DATE to $END_DATE"
-        
-        python scraper.py --date-mode custom \
-          --start-date "$START_DATE" \
-          --end-date "$END_DATE" \
-          --start-time "12:00 AM" \
-          --end-time "11:59 PM"
+    - name: Run INF Report (today so far)
+      run: python inf_scraper.py
+
 
     - name: Upload artifacts on failure or success
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: scraper-output-week-to-date-${{ github.run_id }}
+        name: inf-output-afternoon-${{ github.run_id }}
         path: |
           output/
           app.log

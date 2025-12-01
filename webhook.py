@@ -303,6 +303,19 @@ async def post_quick_actions_card(chat_webhook_url: str, apps_script_url: str, d
                         }
                     ]
                 }
+            },
+            
+            # Week-to-Date Report
+            {"textParagraph": {"text": "<b>📊 Week-to-Date INF</b><br>Summary of INF from Monday through today."}},
+            {
+                "buttonList": {
+                    "buttons": [
+                        {
+                            "text": "Run Week-to-Date",
+                            "onClick": {"openLink": {"url": build_trigger_url("run-inf-analysis", "week_to_date", "10")}}
+                        }
+                    ]
+                }
             }
         ]
 

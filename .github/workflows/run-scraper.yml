@@ -32,11 +32,10 @@ on:
         description: 'End date (MM/DD/YYYY) for custom mode'
         required: false
 
-  # 2. SCHEDULED RUNS:
-  #    This workflow runs at the start of EVERY hour. A check job then determines
-  #    if it's the correct UK local time to proceed with the main scrape.
-  schedule:
-    - cron: '0 * * * *'
+  # 2. SCHEDULED RUNS: DISABLED - now using dedicated scheduled workflows
+  #    Previous behavior: ran at the start of EVERY hour with time-based filtering
+  # schedule:
+  #   - cron: '0 * * * *'
 
   # 3. REPOSITORY DISPATCH: Allows external systems (like Apps Script) to trigger this workflow
   #    via the GitHub API. This enables Google Chat buttons to run reports on demand.
