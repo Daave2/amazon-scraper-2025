@@ -805,7 +805,7 @@ async def main():
     
     # CLI Argument Parsing
     parser = argparse.ArgumentParser(description='INF Scraper (Standalone)')
-    parser.add_argument('--date-mode', choices=['today', 'yesterday', 'last_7_days', 'last_30_days', 'relative', 'custom'], help='Date range mode')
+    parser.add_argument('--date-mode', choices=['today', 'yesterday', 'last_7_days', 'last_30_days', 'week_to_date', 'relative', 'custom'], help='Date range mode')
     parser.add_argument('--start-date', help='Start date (MM/DD/YYYY)')
     parser.add_argument('--end-date', help='End date (MM/DD/YYYY)')
     parser.add_argument('--start-time', help='Start time (e.g., "12:00 AM")')
