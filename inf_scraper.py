@@ -298,7 +298,30 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
         widgets_network.append({"textParagraph": {"text": "<b>🏆 Top 10 Network Wide (INF Occurrences)</b>"}})
         
         for item in network_top_10:
-            text = f"<b>{item['inf']}</b> - {item['name']}"
+            # Build clean store name without prefix
+            from utils import sanitize_store_name
+            top_stores_formatted = []
+            for store_name, inf_count in item['top_stores']:
+                clean_name = sanitize_store_name(store_name, STORE_PREFIX_RE)
+                top_stores_formatted.append(f"{clean_name} {inf_count}")
+            
+            stores_text = ", ".join(top_stores_formatted)
+            store_summary = f"({item['store_count']} stores: {stores_text})"
+            
+            # Build text with INF count, product name, and store breakdown
+            text = f"<b>{item['inf']}</b> - {item['name']}<br>"
+            text += f"<font color='#666666'>{store_summary}</font>"
+            
+            # Add price and SKU if available
+            details = []
+            if item.get('price') is not None:
+                details.append(f"£{item['price']:.2f}")
+            if item.get('sku'):
+                details.append(f"SKU: {item['sku']}")
+            
+            if details:
+                text += f"<br><font color='#888888'>{' | '.join(details)}</font>"
+            
             widgets_network.append({"textParagraph": {"text": text}})
             
         sections_network.append({"widgets": widgets_network})
@@ -698,15 +721,43 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         for store_name, store_number, items, inf_rate in results_list:
             all_items.extend(items)
         
-        # Calculate Network Wide Top 10
+        # Calculate Network Wide Top 10 with store breakdown
         aggregated = {}
         for item in all_items:
             key = (item['sku'], item['name'])
             if key not in aggregated:
-                aggregated[key] = 0
-            aggregated[key] += item['inf']
+                aggregated[key] = {
+                    'total_inf': 0,
+                    'stores': {},  # store_name -> inf_count
+                    'image_url': item.get('image_url', ''),
+                    'barcode': item.get('barcode'),
+                    'price': item.get('price')
+                }
+            aggregated[key]['total_inf'] += item['inf']
             
-        network_list = [{"sku": k[0], "name": k[1], "inf": v, "store": "All Stores"} for k, v in aggregated.items()]
+            # Track store contribution
+            store_name = item['store']
+            if store_name not in aggregated[key]['stores']:
+                aggregated[key]['stores'][store_name] = 0
+            aggregated[key]['stores'][store_name] += item['inf']
+            
+        # Build network list with top 3 contributing stores
+        network_list = []
+        for (sku, name), data in aggregated.items():
+            # Sort stores by INF contribution
+            top_stores = sorted(data['stores'].items(), key=lambda x: x[1], reverse=True)[:3]
+            
+            network_list.append({
+                "sku": sku,
+                "name": name,
+                "inf": data['total_inf'],
+                "top_stores": top_stores,  # [(store_name, inf_count), ...]
+                "store_count": len(data['stores']),
+                "image_url": data['image_url'],
+                "barcode": data['barcode'],
+                "price": data['price']
+            })
+            
         network_list.sort(key=lambda x: x['inf'], reverse=True)
         network_top_10 = network_list[:10]
         
