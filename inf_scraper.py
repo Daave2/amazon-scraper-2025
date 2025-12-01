@@ -299,7 +299,6 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
         
         for item in network_top_10:
             # Build clean store name without prefix
-            from utils import sanitize_store_name
             top_stores_formatted = []
             for store_name, inf_count in item['top_stores']:
                 clean_name = sanitize_store_name(store_name, STORE_PREFIX_RE)
