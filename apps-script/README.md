@@ -151,6 +151,21 @@ You can also type these in Google Chat:
 - When a request is blocked, the response explains who triggered the last run and how long to wait.
 - This prevents duplicate executions from double-clicks or multiple users trying to start the same job simultaneously.
 
+## 👮 User Whitelist
+
+To restrict who can trigger workflows, a whitelist is implemented in `Code.gs`:
+
+```javascript
+// Whitelist Check
+const WHITELIST = [
+  'niki.cooke@morrisonsplc.co.uk'
+  // Add more emails here as needed
+];
+```
+
+Only users in this list can trigger reports. Unauthorized users will see an "Access Denied" message.
+To add more users, simply edit the `WHITELIST` array in `Code.gs` and redeploy.
+
 ## 🔒 Security Notes
 
 - ✅ PAT is stored in Script Properties (not in code)
