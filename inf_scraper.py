@@ -532,7 +532,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                     left_column_widgets.append({
                         "buttonList": {
                             "buttons": [{
-                                "text": "🔍 View in IMS",
+                                "text": "🔍 Optics",
                                 "onClick": {
                                     "openLink": {
                                         "url": inventory_url
