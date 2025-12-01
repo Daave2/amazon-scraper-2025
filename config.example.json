@@ -45,5 +45,6 @@
   "apps_script_whitelist_enabled": true,
   "apps_script_whitelist": [
     "niki.cooke@morrisonsplc.co.uk"
-  ]
+  ],
+  "inventory_system_url": "https://action.focal.systems/ims/product/{sku}"
 }

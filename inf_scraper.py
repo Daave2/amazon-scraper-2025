@@ -515,7 +515,33 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                         }
                     })
                 
-                # Build columns layout: QR (left, compact) | Details + Image (right, fill)
+                # Build columns layout: QR + Button (left, compact) | Details + Image (right, fill)
+                
+                # Left column widgets: QR code + inventory link button
+                left_column_widgets = [{
+                    "image": {
+                        "imageUrl": qr_url,
+                        "altText": f"QR code for SKU {sku}"
+                    }
+                }]
+                
+                # Add inventory system button if URL is configured
+                inventory_url_template = config.get('inventory_system_url')
+                if inventory_url_template:
+                    inventory_url = inventory_url_template.replace('{sku}', sku)
+                    left_column_widgets.append({
+                        "buttonList": {
+                            "buttons": [{
+                                "text": "🔍 View in IMS",
+                                "onClick": {
+                                    "openLink": {
+                                        "url": inventory_url
+                                    }
+                                }
+                            }]
+                        }
+                    })
+                
                 columns_widget = {
                     "columns": {
                         "columnItems": [
@@ -523,7 +549,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                                 "horizontalSizeStyle": "FILL_MINIMUM_SPACE",
                                 "horizontalAlignment": "CENTER",
                                 "verticalAlignment": "CENTER",
-                                "widgets": [{"image": {"imageUrl": qr_url, "altText": f"QR code for SKU {sku}"}}]
+                                "widgets": left_column_widgets
                             },
                             {
                                 "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",

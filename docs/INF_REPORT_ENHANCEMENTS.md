@@ -128,17 +128,27 @@ This validates:
 
 ### Local Testing
 1. Install dependencies: `pip3 install 'qrcode[pil]'`
-2. Run INF scraper to test the new layout
-3. Check Google Chat for enhanced cards
+2. Add `inventory_system_url` to `config.json` (optional)
+3. Run INF scraper to test the new layout
+4. Check Google Chat for enhanced cards
 
 ### GitHub Actions
 Dependencies automatically installed via `requirements.txt` during workflow run.
+
+## Implemented Features
+
+### Clickable Inventory Links ✅
+- **Added**: Clickable "View in IMS" button below each QR code
+- **Configuration**: Set `inventory_system_url` in `config.json`
+  - Example: `"inventory_system_url": "https://action.focal.systems/ims/product/{sku}"`
+  - The `{sku}` placeholder is automatically replaced with the actual SKU
+- **Benefit**: One-click access to detailed inventory information in Focal Systems IMS
+- **User Experience**: Each INF card now has both a scannable QR code (for mobile) and a clickable button (for desktop)
 
 ## Future Enhancements
 
 Potential improvements for future consideration:
 - **Dynamic QR size**: Adjust QR code size based on screen size
-- **Clickable QR codes**: Link to internal inventory system
 - **Color-coded stock levels**: Red for low stock, green for healthy stock
 - **Trend indicators**: Show if INF is increasing or decreasing
 - **Action buttons**: "Mark as resolved", "Request restock", etc.

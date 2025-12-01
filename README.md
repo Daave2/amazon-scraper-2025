@@ -61,7 +61,7 @@ https://github.com/user-attachments/assets/7ba7f0f6-4d0b-4cc2-9937-de5ad766fea4
 - **Smart Filtering**: Automatically excludes stores with 0 orders from reports
 - **Enhanced INF Cards**: 
   - High-resolution product images (300px)
-  - QR codes for SKU lookup
+  - QR codes for SKU lookup + clickable "View in IMS" button
   - Price and SKU display
   - Stock levels with last updated timestamp
   - Standard and promotional location details
@@ -457,7 +457,7 @@ See [`STOCK_ENRICHMENT.md`](STOCK_ENRICHMENT.md) for details.
 │ 🏷️ Aisle 95, Bay RE2, shelf 4        │
 │                                        │
 │ [QR Code]                              │
-│ Scan to lookup SKU                     │
+│ [🔍 View in IMS] (clickable button)   │
 └────────────────────────────────────────┘
 ```
 
