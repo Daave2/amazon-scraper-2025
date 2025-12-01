@@ -138,7 +138,7 @@ Dependencies automatically installed via `requirements.txt` during workflow run.
 ## Implemented Features
 
 ### Clickable Inventory Links ✅
-- **Added**: Clickable "View in IMS" button below each QR code
+- **Added**: Clickable "Optics" button below each QR code
 - **Configuration**: Set `inventory_system_url` in `config.json`
   - Example: `"inventory_system_url": "https://action.focal.systems/ims/product/{sku}"`
   - The `{sku}` placeholder is automatically replaced with the actual SKU

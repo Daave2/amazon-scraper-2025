@@ -59,9 +59,9 @@ https://github.com/user-attachments/assets/7ba7f0f6-4d0b-4cc2-9937-de5ad766fea4
   - Performance breakdown (collection time, latency, bottlenecks)
   - Detailed failure analysis by error type
 - **Smart Filtering**: Automatically excludes stores with 0 orders from reports
-- **Enhanced INF Cards**: 
+- **Enhanced INF Cards**:
   - High-resolution product images (300px)
-  - QR codes for SKU lookup + clickable "View in IMS" button
+  - QR codes for SKU lookup + clickable "Optics" button
   - Price and SKU display
   - Stock levels with last updated timestamp
   - Standard and promotional location details
@@ -457,7 +457,7 @@ See [`STOCK_ENRICHMENT.md`](STOCK_ENRICHMENT.md) for details.
 │ 🏷️ Aisle 95, Bay RE2, shelf 4        │
 │                                        │
 │ [QR Code]                              │
-│ [🔍 View in IMS] (clickable button)   │
+│ [🔍 Optics] (clickable button)        │
 └────────────────────────────────────────┘
 ```
 
