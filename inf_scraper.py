@@ -528,11 +528,22 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                 # Add inventory system button if URL is configured
                 inventory_url_template = config.get('inventory_system_url')
                 if inventory_url_template:
-                    inventory_url = inventory_url_template.replace('{sku}', sku)
+                    # Support both {sku} and {SKU}
+                    inventory_url = inventory_url_template.replace('{sku}', sku).replace('{SKU}', sku)
+                    # Support {store_number}
+                    if store_number:
+                        inventory_url = inventory_url.replace('{store_number}', str(store_number))
+                    else:
+                        # If no store number, remove the parameter if it looks like a query param
+                        # or just leave it empty/unreplaced? 
+                        # Safer to just replace with empty string or handle gracefully.
+                        # For now, let's replace with empty string to avoid {store_number} literal in URL
+                        inventory_url = inventory_url.replace('{store_number}', '')
+
                     left_column_widgets.append({
                         "buttonList": {
                             "buttons": [{
-                                "text": "🔍 Optics",
+                                "text": "ℹ️ Info",
                                 "onClick": {
                                     "openLink": {
                                         "url": inventory_url
