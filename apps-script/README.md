@@ -151,20 +151,47 @@ You can also type these in Google Chat:
 - When a request is blocked, the response explains who triggered the last run and how long to wait.
 - This prevents duplicate executions from double-clicks or multiple users trying to start the same job simultaneously.
 
-## 👮 User Whitelist
+## 👮 User Whitelist (Configurable)
 
-To restrict who can trigger workflows, a whitelist is implemented in `Code.gs`:
+The whitelist controls who can trigger workflows via the Quick Actions buttons.
 
-```javascript
-// Whitelist Check
-const WHITELIST = [
-  'niki.cooke@morrisonsplc.co.uk'
-  // Add more emails here as needed
-];
-```
+### Option 1: Configure via Script Properties (Recommended)
 
-Only users in this list can trigger reports. Unauthorized users will see an "Access Denied" message.
-To add more users, simply edit the `WHITELIST` array in `Code.gs` and redeploy.
+You can enable/disable and manage the whitelist without redeploying:
+
+1. In Apps Script editor, go to **Project Settings** (gear icon)
+2. Scroll to **Script Properties**
+3. Add these properties:
+
+| Property Name | Value | Description |
+|--------------|-------|-------------|
+| `WHITELIST_ENABLED` | `true` or `false` | Set to `false` to disable whitelist (allow everyone) |
+| `WHITELIST_EMAILS` | `["email1@example.com", "email2@example.com"]` | JSON array of authorized emails |
+
+**Example:**
+- **WHITELIST_ENABLED**: `true`
+- **WHITELIST_EMAILS**: `["niki.cooke@morrisonsplc.co.uk", "another.user@morrisonsplc.co.uk"]`
+
+### Option 2: Use Default Hardcoded Whitelist
+
+If you don't set the Script Properties, the system will use the default:
+- Whitelist is **enabled** by default
+- Only `niki.cooke@morrisonsplc.co.uk` is authorized
+
+### How It Works
+
+- **Whitelist Enabled** (default): Only users in the whitelist can trigger workflows
+- **Whitelist Disabled**: Anyone with the link can trigger workflows (use with caution!)
+- Unauthorized users see an "Access Denied" message
+- All trigger attempts are logged with user attribution
+
+### To Disable the Whitelist
+
+Set `WHITELIST_ENABLED` to `false` in Script Properties. This allows anyone with the deployment URL to trigger workflows.
+
+### To Add/Remove Users
+
+Update the `WHITELIST_EMAILS` property with a JSON array of authorized emails. Changes take effect immediately - no redeployment needed!
 
 ## 🔒 Security Notes
 

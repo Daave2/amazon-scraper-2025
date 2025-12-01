@@ -41,5 +41,9 @@
   "custom_start_date": "11/27/2025",
   "custom_end_date": "11/27/2025",
   "start_time": "12:00 AM",
-  "end_time": "11:59 PM"
+  "end_time": "11:59 PM",
+  "apps_script_whitelist_enabled": true,
+  "apps_script_whitelist": [
+    "niki.cooke@morrisonsplc.co.uk"
+  ]
 }

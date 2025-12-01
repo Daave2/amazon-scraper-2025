@@ -45,21 +45,43 @@ function doGet(e) {
     const topN = params.top_n || '5';
     const sender = Session.getActiveUser().getEmail(); // Securely get user email
     
-    // Whitelist Check
-    const WHITELIST = [
-      'niki.cooke@morrisonsplc.co.uk'
-      // Add more emails here as needed
-    ];
+    // Whitelist Check (Configurable via Script Properties)
+    const props = PropertiesService.getScriptProperties();
+    const whitelistEnabled = props.getProperty('WHITELIST_ENABLED');
     
-    if (!sender || !WHITELIST.includes(sender)) {
-      Logger.log(`Access Denied: ${sender} is not in whitelist.`);
-      return HtmlService.createHtmlOutput(`
-        <div style="font-family: sans-serif; text-align: center; padding-top: 50px; color: red;">
-          <h1>🚫 Access Denied</h1>
-          <p>User <b>${sender || 'Unknown'}</b> is not authorized to trigger workflows.</p>
-          <p>Please contact the administrator to request access.</p>
-        </div>
-      `);
+    // If whitelist is explicitly disabled, skip the check
+    if (whitelistEnabled !== null && whitelistEnabled.toLowerCase() === 'false') {
+      Logger.log(`Whitelist disabled - allowing access for: ${sender}`);
+    } else {
+      // Whitelist is enabled (default behavior)
+      // Try to get whitelist from Script Properties first
+      let whitelist = [];
+      const whitelistProperty = props.getProperty('WHITELIST_EMAILS');
+      
+      if (whitelistProperty) {
+        try {
+          whitelist = JSON.parse(whitelistProperty);
+          Logger.log(`Using whitelist from Script Properties: ${whitelist.join(', ')}`);
+        } catch (e) {
+          Logger.log(`Error parsing WHITELIST_EMAILS: ${e}. Using default.`);
+          whitelist = ['niki.cooke@morrisonsplc.co.uk'];
+        }
+      } else {
+        // Fallback to hardcoded default
+        whitelist = ['niki.cooke@morrisonsplc.co.uk'];
+        Logger.log(`Using default whitelist: ${whitelist.join(', ')}`);
+      }
+      
+      if (!sender || !whitelist.includes(sender)) {
+        Logger.log(`Access Denied: ${sender} is not in whitelist.`);
+        return HtmlService.createHtmlOutput(`
+          <div style="font-family: sans-serif; text-align: center; padding-top: 50px; color: red;">
+            <h1>🚫 Access Denied</h1>
+            <p>User <b>${sender || 'Unknown'}</b> is not authorized to trigger workflows.</p>
+            <p>Please contact the administrator to request access.</p>
+          </div>
+        `);
+      }
     }
     
     Logger.log(`GET Trigger: ${eventType}, date_mode: ${dateMode}, requested by: ${sender}`);
