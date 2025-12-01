@@ -7,24 +7,27 @@
 
 Hi team! 👋
 
-I have launched an automated reporting system that delivers in day store performance data directly to this chat. Here's what you need to know:
+I've launched an automated reporting system that delivers real-time store performance data directly to this chat.
+
+**🎯 What This Tool Does:**
+Provides data-driven insights to monitor stores and identify where support is needed. Stores already receive their daily update spreadsheet overnight - this tool gives you real-time visibility throughout the day.
 
 **📅 Daily Automated Reports:**
 • **8 AM** - Yesterday's INF Analysis
 • **12 PM** - Performance Check
 • **2 PM** - Today's INF Update  
 
-**⚡ On-Demand Reports (NEW!):**
+**⚡ On-Demand Reports (Quick Actions):**
 After each report, you'll see a "Quick Actions" card with buttons to instantly trigger:
 • 🔍 INF Analysis (Today) - Top 10 missing items per store
 • 📊 Performance Check - Lates, UPH, and key metrics
 • 📅 Yesterday's INF Report - Items that were missed yesterday
 • 📊 Week-to-Date INF - Monday through today summary
 
-**What's Included?**
+**📊 What's Included?**
 ✅ Performance highlights (Bottom 5 stores for Lates, INF, UPH)
 ✅ Detailed INF cards with product images, prices, stock levels, and QR codes
-✅ Location data
+✅ Location data (aisle, bay, shelf)
 ✅ Discontinued product alerts
 
 **How to Use:**
@@ -43,11 +46,14 @@ Questions? Let me know!
 
 Hi team,
 
-I'm excited to introduce our new Amazon Performance & INF (Item Not Found) Analysis automation system. This tool will help us identify and resolve stock issues faster, improve performance metrics, and reduce manual reporting time.
+I'm excited to introduce our new Amazon Performance & INF (Item Not Found) Analysis automation system.
 
 ### What Is It?
 
 An automated system that scrapes Amazon Seller Central data for all Morrisons stores and delivers comprehensive reports directly to our Google Chat workspace. It runs multiple times daily and can be triggered on-demand with a single click.
+
+**Context:**
+Stores already receive their daily update spreadsheet (overnight batch). This tool provides real-time visibility throughout the day.
 
 ### Daily Automated Reports
 
@@ -56,12 +62,10 @@ The system sends 3 scheduled reports each day:
 1. **8 AM - Yesterday's INF Analysis**
    - Complete breakdown of items that were marked "not found" yesterday
    - Top 10 most problematic items per store
-   - Helps teams prioritize morning stock checks
 
 2. **12 PM - Performance Check**
-   - Current day performance metrics
-   - Identifies stores struggling with Lates, INF, or UPH
-   - Allows teams to course-correct during the shift
+   - Current day performance metrics (Lates, INF, UPH)
+   - Identifies stores that may need attention
 
 3. **2 PM - Today's INF Update**
    - Mid-afternoon snapshot of current INF issues
@@ -86,13 +90,15 @@ Simply click any button to generate that report immediately. The system prevents
 - Bottom 5 stores for UPH (lowest Units Per Hour)
 - Job summary with throughput metrics and failure analysis
 
+**Note:** The system currently tracks Lates, INF, and UPH. Available vs Confirmed picking hours (AvC) is not included at this time, as confirmed hours come from a separate sheet and available hours on the dashboard are unreliable in-day.
+
 **Enhanced INF Cards:**
 Each problematic item shows:
 - High-resolution product image
 - Product name and SKU
 - Price (from Morrisons API)
 - Current stock level and last updated time
-- Warehouse location (aisle, bay, shelf)
+- Location (aisle, bay, shelf)
 - Promotional display location (if applicable)
 - QR code for quick SKU lookup
 - Discontinued/not-ranged alerts
@@ -106,15 +112,19 @@ Each problematic item shows:
 
 1. **Automated Reports** - No action needed! Reports arrive at scheduled times.
 2. **On-Demand Reports** - Click the button for the report you want.
-3. **Review Data** - Use the information to prioritize stock checks and resolve issues.
+3. **Review Data** - Use the information to identify stores needing support and prioritize interventions.
 
 ### Benefits
 
-✅ **Faster Issue Resolution** - Identify and locate problem items instantly
+✅ **Real-Time Visibility** - Multiple daily updates keep you informed throughout the day
 ✅ **Better Prioritization** - Focus on stores and items with the biggest impact
 ✅ **Reduced Manual Work** - No more manually checking each store individually
-✅ **Real-Time Insights** - Multiple daily updates keep you informed
 ✅ **Team Visibility** - Everyone sees the same data at the same time
+✅ **On-Demand Access** - Trigger any report instantly with Quick Actions
+
+### Future Enhancements
+
+We're exploring the possibility of sending INF item lists directly to individual store group chats (without Quick Actions access) to give them visibility into their specific issues.
 
 ### Support
 
@@ -147,13 +157,16 @@ A: This usually means your store had 0 orders for that period, or there were no 
 A: The schedule is fixed (8 AM, 12 PM, 2 PM), but you can trigger any report on-demand using Quick Actions buttons.
 
 **Q: What does "INF" mean?**
-A: Item Not Found - when a customer orders an item but it can't be located in the warehouse during picking.
+A: Item Not Found - when a customer orders an item but it can't be located during picking.
 
 **Q: Who can I contact if something looks wrong?**
 A: Contact Niki if you notice incorrect data or have questions about the reports.
 
 **Q: What does the cooldown message mean?**
 A: Someone already triggered that report recently. Wait until the cooldown period ends (shown in the message) before requesting again.
+
+**Q: Will stores see these reports?**
+A: Currently, these reports are for central and support teams only. Stores already receive their daily update spreadsheet. In the future, we may send INF item lists directly to store chats.
 
 ---
 
@@ -194,31 +207,34 @@ Example: `22 - VOSS Water (5 stores: Cleveleys 10, Woking 4, Halifax 3) £1.25 |
 - **£1.25** = Current price
 - **SKU: 12345** = Product SKU for lookup
 
----
+## Data Interpretation Guide
 
-## What to Do When You See INF Issues
+### INF Card Details
 
-### Immediate Actions
+- **Big bold number** = Total times this item was reported missing for the period
+- **📍 Location** = Aisle, bay, shelf information
+- **📊 Stock level** = Current stock quantity (e.g., "10 EA" = 10 units)
+- **💷 Price** = Current retail price
+- **🚫 Red DISCONTINUED alert** = Product is no longer ranged
+- **QR Code** = Scan to look up SKU
 
-1. **Check the location** - Is the item where the report says it should be?
-2. **Check stock levels** - If it shows stock, investigate why it wasn't found
-3. **If discontinued** (🚫 alert shown) - Remove from pick locations and inform management
-4. **If misplaced** - Correct the location in your system
-5. **If stock is 0** - Check when next delivery is expected
+### Network-Wide Summary Format
 
-### For Recurring Issues
+Shows the top 10 most problematic items across ALL stores:
 
-- May need better signage or shelf labels
-- Consider additional training for pick team
-- Review pick path efficiency
-- Check for look-alike products causing confusion
+Example: `22 - VOSS Water (5 stores: Cleveleys 10, Woking 4, Halifax 3) £1.25 | SKU: 12345`
 
-### Pro Tips
+- **22** = Total INF occurrences across all stores
+- **5 stores** = Number of stores affected
+- **Cleveleys 10** = Cleveleys had 10 INF for this item
+- **£1.25** = Current price
+- **SKU: 12345** = Product SKU
 
-- 💡 Use the QR code on each card to quickly look up the SKU in your handheld scanner
-- 💡 Check the "Last Updated" timestamp on stock data to see how current it is
-- 💡 Network-wide summary helps identify systemic issues vs. store-specific problems
-- 💡 Compare today's 2 PM report vs. yesterday's 8 AM report to track improvements
+### Quick Tips
+
+- 💡 Network-wide summary helps identify systemic vs. store-specific issues
+- 💡 Compare today's 2 PM report vs. yesterday's 8 AM report to track trends
+- 💡 Check the "Last Updated" timestamp on stock data for freshness
 
 ---
 
