@@ -171,13 +171,8 @@ jobs:
             --start-time "12:00 AM" \
             --end-time "11:59 PM"
         else
-          # Default: today
-          TODAY=$(TZ="Europe/London" date +"%m/%d/%Y")
-          python inf_scraper.py --date-mode custom \
-            --start-date "$TODAY" \
-            --end-date "$TODAY" \
-            --start-time "12:00 AM" \
-            --end-time "11:59 PM"
+          # Default: today - INF page already shows today by default, no date selection needed
+          python inf_scraper.py
         fi
 
     - name: Upload artifacts on failure or success
