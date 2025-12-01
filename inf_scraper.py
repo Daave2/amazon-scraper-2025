@@ -13,7 +13,7 @@ from asyncio import Queue, Lock, Condition
 from playwright.async_api import async_playwright, Page, TimeoutError, expect, Browser
 import qrcode
 from pytz import timezone
-import urllib.parse
+from urllib.parse import urlencode
 
 # Import modules
 from utils import setup_logging, sanitize_store_name, _save_screenshot, load_default_data, ensure_storage_state, LOCAL_TIMEZONE
@@ -308,7 +308,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
             # Helper to build URL
             def build_trigger_url(event_type, date_mode, top_n_val):
                 params = {'event_type': event_type, 'date_mode': date_mode, 'top_n': top_n_val}
-                return f"{APPS_SCRIPT_URL}?{urllib.parse.urlencode(params)}"
+                return f"{APPS_SCRIPT_URL}?{urlencode(params)}"
 
             sections_network.append({
                 "header": "⚡ Quick Actions",
