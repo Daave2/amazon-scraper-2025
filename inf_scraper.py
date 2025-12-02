@@ -873,7 +873,7 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         for store_name, store_number, items, inf_rate in results_list:
             all_items.extend(items)
         
-        # Calculate Network Wide Top 10 with store breakdown
+        # Calculate Network Wide Top 25 with store breakdown
         aggregated = {}
         for item in all_items:
             key = (item['sku'], item['name'])
@@ -893,24 +893,27 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
                 aggregated[key]['stores'][store_name] = 0
             aggregated[key]['stores'][store_name] += item['inf']
             
-        # Build network list with top contributing stores (up to 10)
+        # Build network list with top contributing stores (up to 10) and all stores for CSV
         network_list = []
         for (sku, name), data in aggregated.items():
             # Sort stores by INF contribution
-            top_stores = sorted(data['stores'].items(), key=lambda x: x[1], reverse=True)[:10]
-            
+            sorted_stores = sorted(data['stores'].items(), key=lambda x: x[1], reverse=True)
+            top_stores = sorted_stores[:10]
+
             network_list.append({
                 "sku": sku,
                 "name": name,
                 "inf": data['total_inf'],
                 "top_stores": top_stores,  # [(store_name, inf_count), ...]
+                "all_stores": sorted_stores,
                 "store_count": len(data['stores']),
                 "image_url": data['image_url'],
                 "barcode": data['barcode'],
                 "price": data['price']
             })
-            
+
         network_list.sort(key=lambda x: x['inf'], reverse=True)
+        network_top_25 = network_list[:25]
         network_top_10 = network_list[:10]
         
         # Determine title prefix based on date mode
@@ -987,21 +990,26 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             # 2. Network-Wide Summary CSV
             network_csv_path = os.path.join(OUTPUT_DIR, f'inf_network_summary_{timestamp_str}.csv')
             network_fieldnames = [
-                'timestamp', 'rank', 'sku', 'product_name', 'total_inf_count', 
-                'store_count', 'top_contributing_stores', 'image_url', 'price', 'barcode'
+                'timestamp', 'rank', 'sku', 'product_name', 'total_inf_count',
+                'store_count', 'top_contributing_stores', 'all_impacted_stores', 'image_url', 'price', 'barcode'
             ]
             
             with open(network_csv_path, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.DictWriter(f, fieldnames=network_fieldnames, extrasaction='ignore')
                 writer.writeheader()
                 
-                for rank, item in enumerate(network_top_10, 1):
+                for rank, item in enumerate(network_top_25, 1):
                     # Format top contributing stores as "Store1 (count), Store2 (count), ..."
                     top_stores_str = ', '.join([
                         f"{sanitize_store_name(store, STORE_PREFIX_RE)} ({count})"
                         for store, count in item['top_stores']
                     ])
-                    
+
+                    all_stores_str = ', '.join([
+                        f"{sanitize_store_name(store, STORE_PREFIX_RE)} ({count})"
+                        for store, count in item.get('all_stores', [])
+                    ])
+
                     row = {
                         'timestamp': datetime.now(LOCAL_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S'),
                         'rank': rank,
@@ -1010,6 +1018,7 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
                         'total_inf_count': item.get('inf', 0),
                         'store_count': item.get('store_count', 0),
                         'top_contributing_stores': top_stores_str,
+                        'all_impacted_stores': all_stores_str,
                         'image_url': item.get('image_url', ''),
                         'price': item.get('price', ''),
                         'barcode': item.get('barcode', '')
