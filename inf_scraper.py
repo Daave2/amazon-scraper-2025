@@ -379,11 +379,9 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
             widgets_network.append({
                 "buttonList": {
                     "buttons": [{
-                        "textButton": {
-                            "text": "Download CSV",
-                            "onClick": {
-                                "openLink": {"url": csv_download_url}
-                            }
+                        "text": "Download CSV",
+                        "onClick": {
+                            "openLink": {"url": csv_download_url}
                         }
                     }]
                 }
@@ -430,11 +428,9 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                 widgets_network.append({
                     "buttonList": {
                         "buttons": [{
-                            "textButton": {
-                                "text": "View all stores",
-                                "onClick": {
-                                    "openLink": {"url": store_list_url}
-                                }
+                            "text": "View all stores",
+                            "onClick": {
+                                "openLink": {"url": store_list_url}
                             }
                         }]
                     }
@@ -927,7 +923,13 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             csv_download_url = await upload_inf_csv_for_sharing(csv_path)
 
             if not csv_download_url:
-                app_logger.warning("INF CSV saved locally but could not generate a shareable link.")
+                app_logger.warning("INF CSV saved locally but could not generate a shareable link. Falling back to Data URI.")
+                try:
+                    with open(csv_path, 'r', encoding='utf-8') as f:
+                        csv_content = f.read()
+                    csv_download_url = f"data:text/csv;charset=utf-8,{quote(csv_content)}"
+                except Exception as e:
+                    app_logger.error(f"Failed to generate Data URI for CSV: {e}")
         
         # Determine title prefix based on date mode
         title_prefix = ""
