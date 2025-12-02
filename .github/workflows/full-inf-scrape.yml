@@ -127,7 +127,7 @@ jobs:
     - name: Run Full INF Scrape
       env:
         PWDEBUG: 0
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
       run: |
         python scraper.py --date-mode "$DATE_MODE" --inf-only --top-n "$TOP_ITEMS"
 

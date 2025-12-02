@@ -91,7 +91,7 @@ jobs:
 
     - name: Run INF Report (today so far)
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
       run: python inf_scraper.py
 
 

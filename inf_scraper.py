@@ -76,7 +76,7 @@ INF_PAGE_URL = "https://sellercentral.amazon.co.uk/snow-inventory/inventoryinsig
 def upload_csv_to_gist(csv_file_path: str, description: str) -> str:
     """
     Upload a CSV file to GitHub Gist and return the raw file URL.
-    Only works when running in GitHub Actions (GITHUB_TOKEN available).
+    Only works when running in GitHub Actions (GIST_TOKEN available).
     
     Args:
         csv_file_path: Path to the CSV file
@@ -88,9 +88,9 @@ def upload_csv_to_gist(csv_file_path: str, description: str) -> str:
     import requests
     
     # Check if running in GitHub Actions
-    github_token = os.environ.get('GITHUB_TOKEN')
+    github_token = os.environ.get('GIST_TOKEN')
     if not github_token:
-        app_logger.debug("GITHUB_TOKEN not found - skipping Gist upload (not running in GitHub Actions)")
+        app_logger.debug("GIST_TOKEN not found - skipping Gist upload")
         return ""
     
     try:
