@@ -422,6 +422,15 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                     "header": "📊 Download CSV Data",
                     "widgets": [
                         {
+                            "textParagraph": {
+                                "text": (
+                                    "<i>Tip: To download the CSV, open the link, then "
+                                    "use your browser's Save As (Ctrl+S / Cmd+S) and "
+                                    "keep the .csv extension.</i>"
+                                )
+                            }
+                        },
+                        {
                             "buttonList": {
                                 "buttons": csv_buttons
                             }
