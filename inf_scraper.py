@@ -923,13 +923,7 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             csv_download_url = await upload_inf_csv_for_sharing(csv_path)
 
             if not csv_download_url:
-                app_logger.warning("INF CSV saved locally but could not generate a shareable link. Falling back to Data URI.")
-                try:
-                    with open(csv_path, 'r', encoding='utf-8') as f:
-                        csv_content = f.read()
-                    csv_download_url = f"data:text/csv;charset=utf-8,{quote(csv_content)}"
-                except Exception as e:
-                    app_logger.error(f"Failed to generate Data URI for CSV: {e}")
+                app_logger.warning("INF CSV saved locally but could not generate a shareable link.")
         
         # Determine title prefix based on date mode
         title_prefix = ""
