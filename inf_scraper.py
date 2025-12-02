@@ -967,7 +967,9 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             ]
             
             with open(store_csv_path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=store_fieldnames, extrasaction='ignore')
+                writer = csv.DictWriter(
+                    f, fieldnames=store_fieldnames, extrasaction='ignore', quoting=csv.QUOTE_ALL
+                )
                 writer.writeheader()
                 
                 for store_name, store_number, items, inf_rate in results_list:
@@ -1004,7 +1006,9 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             ]
             
             with open(network_csv_path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=network_fieldnames, extrasaction='ignore')
+                writer = csv.DictWriter(
+                    f, fieldnames=network_fieldnames, extrasaction='ignore', quoting=csv.QUOTE_ALL
+                )
                 writer.writeheader()
                 
                 for rank, item in enumerate(network_top_25, 1):
