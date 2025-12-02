@@ -13,7 +13,7 @@ from asyncio import Queue, Lock, Condition
 from playwright.async_api import async_playwright, Page, TimeoutError, expect, Browser
 import qrcode
 from pytz import timezone
-from urllib.parse import urlencode, quote
+from urllib.parse import urlencode
 
 # Import modules
 from utils import setup_logging, sanitize_store_name, _save_screenshot, load_default_data, ensure_storage_state, LOCAL_TIMEZONE
@@ -269,85 +269,7 @@ def generate_qr_code_data_url(sku: str) -> str:
         return ""
 
 
-def export_inf_results_to_csv(items: List[Dict], output_dir: str = OUTPUT_DIR) -> str:
-    """Export INF results to a CSV file and return the file path."""
-
-    if not items:
-        app_logger.info("No INF items to export to CSV.")
-        return ""
-
-    try:
-        os.makedirs(output_dir, exist_ok=True)
-
-        timestamp = datetime.now(LOCAL_TIMEZONE).strftime("%Y%m%d_%H%M%S")
-        filename = f"inf_results_{timestamp}.csv"
-        filepath = os.path.join(output_dir, filename)
-
-        fieldnames = [
-            "store",
-            "store_number",
-            "sku",
-            "name",
-            "inf",
-            "inf_rate",
-            "price",
-            "barcode",
-            "stock_on_hand",
-            "stock_unit",
-            "stock_last_updated",
-            "std_location",
-            "promo_location",
-            "product_status",
-            "commercially_active",
-            "image_url",
-        ]
-
-        with open(filepath, "w", newline="", encoding="utf-8") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction="ignore")
-            writer.writeheader()
-            writer.writerows(items)
-
-        app_logger.info(f"INF results exported to CSV: {filepath}")
-        return filepath
-    except Exception as e:
-        app_logger.error(f"Failed to export INF results to CSV: {e}")
-        return ""
-
-
-async def upload_inf_csv_for_sharing(filepath: str) -> str:
-    """Upload the INF CSV to a temporary file host and return a shareable link."""
-
-    import aiohttp
-    import ssl
-    import certifi
-
-    if not filepath or not os.path.isfile(filepath):
-        return ""
-
-    filename = os.path.basename(filepath)
-    upload_url = f"https://transfer.sh/{filename}"
-
-    ssl_context = ssl.create_default_context(cafile=certifi.where())
-    connector = aiohttp.TCPConnector(ssl=ssl_context)
-    timeout = aiohttp.ClientTimeout(total=120)
-
-    try:
-        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-            with open(filepath, "rb") as file_handle:
-                async with session.put(upload_url, data=file_handle) as resp:
-                    if resp.status == 200:
-                        link = (await resp.text()).strip()
-                        app_logger.info(f"INF CSV uploaded for sharing: {link}")
-                        return link
-                    error_text = await resp.text()
-                    app_logger.error(f"Failed to upload INF CSV ({resp.status}): {error_text}")
-    except Exception as e:
-        app_logger.error(f"Error uploading INF CSV for sharing: {e}")
-
-    return ""
-
-
-async def send_inf_report(store_data, network_top_10, skip_network_report=False, title_prefix="", top_n=5, csv_download_url: str = ""):
+async def send_inf_report(store_data, network_top_10, skip_network_report=False, title_prefix="", top_n=5):
     """Send INF report to Google Chat
     
     Args:
@@ -375,39 +297,16 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
         widgets_network = []
         widgets_network.append({"textParagraph": {"text": "<b>🏆 Top 10 Network Wide (INF Occurrences)</b>"}})
         
-        if csv_download_url:
-            widgets_network.append({
-                "buttonList": {
-                    "buttons": [{
-                        "text": "Download CSV",
-                        "onClick": {
-                            "openLink": {"url": csv_download_url}
-                        }
-                    }]
-                }
-            })
-
         for item in network_top_10:
             # Build clean store name without prefix
             top_stores_formatted = []
             for store_name, inf_count in item['top_stores']:
                 clean_name = sanitize_store_name(store_name, STORE_PREFIX_RE)
                 top_stores_formatted.append(f"{clean_name} {inf_count}")
-
+            
             stores_text = ", ".join(top_stores_formatted)
             store_summary = f"({item['store_count']} stores: {stores_text})"
-
-            store_list_content = ""
-            store_list_url = ""
-            if item.get('stores_full'):
-                store_lines = []
-                for store_name, inf_count in item['stores_full']:
-                    clean_store_name = sanitize_store_name(store_name, STORE_PREFIX_RE)
-                    store_lines.append(f"{clean_store_name} - {inf_count} INF")
-
-                store_list_content = f"{item['name']} - All INF Stores\n" + "\n".join(store_lines)
-                store_list_url = f"data:text/plain;charset=utf-8,{quote(store_list_content)}"
-
+            
             # Build text with INF count, product name, and store breakdown
             text = f"<b>{item['inf']}</b> - {item['name']}<br>"
             text += f"<font color='#666666'>{store_summary}</font>"
@@ -421,20 +320,8 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
             
             if details:
                 text += f"<br><font color='#888888'>{' | '.join(details)}</font>"
-
+            
             widgets_network.append({"textParagraph": {"text": text}})
-
-            if store_list_url:
-                widgets_network.append({
-                    "buttonList": {
-                        "buttons": [{
-                            "text": "View all stores",
-                            "onClick": {
-                                "openLink": {"url": store_list_url}
-                            }
-                        }]
-                    }
-                })
             
         sections_network.append({"widgets": widgets_network})
         
@@ -866,12 +753,8 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         # Process Results
         # results_list contains tuples of (store_name, store_number, items, inf_rate)
         all_items = []
-
+        
         for store_name, store_number, items, inf_rate in results_list:
-            for item in items:
-                item.setdefault('store', store_name)
-                item['store_number'] = store_number
-                item['inf_rate'] = inf_rate
             all_items.extend(items)
         
         # Calculate Network Wide Top 10 with store breakdown
@@ -898,15 +781,13 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         network_list = []
         for (sku, name), data in aggregated.items():
             # Sort stores by INF contribution
-            sorted_stores = sorted(data['stores'].items(), key=lambda x: x[1], reverse=True)
-            top_stores = sorted_stores[:3]
-
+            top_stores = sorted(data['stores'].items(), key=lambda x: x[1], reverse=True)[:3]
+            
             network_list.append({
                 "sku": sku,
                 "name": name,
                 "inf": data['total_inf'],
                 "top_stores": top_stores,  # [(store_name, inf_count), ...]
-                "stores_full": sorted_stores,
                 "store_count": len(data['stores']),
                 "image_url": data['image_url'],
                 "barcode": data['barcode'],
@@ -915,15 +796,6 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             
         network_list.sort(key=lambda x: x['inf'], reverse=True)
         network_top_10 = network_list[:10]
-
-        csv_path = export_inf_results_to_csv(all_items, OUTPUT_DIR)
-        csv_download_url = ""
-
-        if csv_path:
-            csv_download_url = await upload_inf_csv_for_sharing(csv_path)
-
-            if not csv_download_url:
-                app_logger.warning("INF CSV saved locally but could not generate a shareable link.")
         
         # Determine title prefix based on date mode
         title_prefix = ""
@@ -953,14 +825,7 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         # Send Report - skip network-wide report if called from main scraper with specific stores
         skip_network = target_stores is not None
         top_n = active_config.get('top_n_items', 5)  # Default to 5 if not specified
-        await send_inf_report(
-            results_list,
-            network_top_10,
-            skip_network_report=skip_network,
-            title_prefix=title_prefix,
-            top_n=top_n,
-            csv_download_url=csv_download_url
-        )
+        await send_inf_report(results_list, network_top_10, skip_network_report=skip_network, title_prefix=title_prefix, top_n=top_n)
         
         # Send Quick Actions card if not skipped (i.e., standalone run)
         # Send Quick Actions card if not skipped (i.e., standalone run)
