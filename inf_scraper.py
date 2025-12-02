@@ -269,7 +269,85 @@ def generate_qr_code_data_url(sku: str) -> str:
         return ""
 
 
-async def send_inf_report(store_data, network_top_10, skip_network_report=False, title_prefix="", top_n=5):
+def export_inf_results_to_csv(items: List[Dict], output_dir: str = OUTPUT_DIR) -> str:
+    """Export INF results to a CSV file and return the file path."""
+
+    if not items:
+        app_logger.info("No INF items to export to CSV.")
+        return ""
+
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+
+        timestamp = datetime.now(LOCAL_TIMEZONE).strftime("%Y%m%d_%H%M%S")
+        filename = f"inf_results_{timestamp}.csv"
+        filepath = os.path.join(output_dir, filename)
+
+        fieldnames = [
+            "store",
+            "store_number",
+            "sku",
+            "name",
+            "inf",
+            "inf_rate",
+            "price",
+            "barcode",
+            "stock_on_hand",
+            "stock_unit",
+            "stock_last_updated",
+            "std_location",
+            "promo_location",
+            "product_status",
+            "commercially_active",
+            "image_url",
+        ]
+
+        with open(filepath, "w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(items)
+
+        app_logger.info(f"INF results exported to CSV: {filepath}")
+        return filepath
+    except Exception as e:
+        app_logger.error(f"Failed to export INF results to CSV: {e}")
+        return ""
+
+
+async def upload_inf_csv_for_sharing(filepath: str) -> str:
+    """Upload the INF CSV to a temporary file host and return a shareable link."""
+
+    import aiohttp
+    import ssl
+    import certifi
+
+    if not filepath or not os.path.isfile(filepath):
+        return ""
+
+    filename = os.path.basename(filepath)
+    upload_url = f"https://transfer.sh/{filename}"
+
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    timeout = aiohttp.ClientTimeout(total=120)
+
+    try:
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+            with open(filepath, "rb") as file_handle:
+                async with session.put(upload_url, data=file_handle) as resp:
+                    if resp.status == 200:
+                        link = (await resp.text()).strip()
+                        app_logger.info(f"INF CSV uploaded for sharing: {link}")
+                        return link
+                    error_text = await resp.text()
+                    app_logger.error(f"Failed to upload INF CSV ({resp.status}): {error_text}")
+    except Exception as e:
+        app_logger.error(f"Error uploading INF CSV for sharing: {e}")
+
+    return ""
+
+
+async def send_inf_report(store_data, network_top_10, skip_network_report=False, title_prefix="", top_n=5, csv_download_url: str = ""):
     """Send INF report to Google Chat
     
     Args:
@@ -297,6 +375,20 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
         widgets_network = []
         widgets_network.append({"textParagraph": {"text": "<b>🏆 Top 10 Network Wide (INF Occurrences)</b>"}})
         
+        if csv_download_url:
+            widgets_network.append({
+                "buttonList": {
+                    "buttons": [{
+                        "textButton": {
+                            "text": "Download CSV",
+                            "onClick": {
+                                "openLink": {"url": csv_download_url}
+                            }
+                        }
+                    }]
+                }
+            })
+
         for item in network_top_10:
             # Build clean store name without prefix
             top_stores_formatted = []
@@ -753,8 +845,12 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         # Process Results
         # results_list contains tuples of (store_name, store_number, items, inf_rate)
         all_items = []
-        
+
         for store_name, store_number, items, inf_rate in results_list:
+            for item in items:
+                item.setdefault('store', store_name)
+                item['store_number'] = store_number
+                item['inf_rate'] = inf_rate
             all_items.extend(items)
         
         # Calculate Network Wide Top 10 with store breakdown
@@ -796,6 +892,15 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             
         network_list.sort(key=lambda x: x['inf'], reverse=True)
         network_top_10 = network_list[:10]
+
+        csv_path = export_inf_results_to_csv(all_items, OUTPUT_DIR)
+        csv_download_url = ""
+
+        if csv_path:
+            csv_download_url = await upload_inf_csv_for_sharing(csv_path)
+
+            if not csv_download_url:
+                app_logger.warning("INF CSV saved locally but could not generate a shareable link.")
         
         # Determine title prefix based on date mode
         title_prefix = ""
@@ -825,7 +930,14 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         # Send Report - skip network-wide report if called from main scraper with specific stores
         skip_network = target_stores is not None
         top_n = active_config.get('top_n_items', 5)  # Default to 5 if not specified
-        await send_inf_report(results_list, network_top_10, skip_network_report=skip_network, title_prefix=title_prefix, top_n=top_n)
+        await send_inf_report(
+            results_list,
+            network_top_10,
+            skip_network_report=skip_network,
+            title_prefix=title_prefix,
+            top_n=top_n,
+            csv_download_url=csv_download_url
+        )
         
         # Send Quick Actions card if not skipped (i.e., standalone run)
         # Send Quick Actions card if not skipped (i.e., standalone run)
