@@ -75,7 +75,8 @@ jobs:
           "use_date_range": false,
           "morrisons_api_key": "${MORRISONS_API_KEY}",
           "morrisons_bearer_token_url": "${MORRISONS_BEARER_TOKEN_URL}",
-          "enrich_stock_data": true
+          "enrich_stock_data": true,
+          "inventory_system_url": "https://app.218.team/assistant/{sku}?locationId={store_number}"
         }
         JSON
 
@@ -89,6 +90,8 @@ jobs:
         search_artifacts: true
 
     - name: Run INF Report (today so far)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: python inf_scraper.py
 
 
