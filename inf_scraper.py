@@ -363,7 +363,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
     if not skip_network_report:
         sections_network = []
         widgets_network = []
-        widgets_network.append({"textParagraph": {"text": "<b>🏆 Top 10 Network Wide (INF Occurrences)</b>"}})
+        widgets_network.append({"textParagraph": {"text": "<b>⚠️ Top 10 Network Wide (INF Occurrences)</b>"}})
         
         for item in network_top_10:
             # Build clean store name without prefix
