@@ -929,6 +929,9 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         # Export to CSV (will then send report with CSV links)
         csv_urls = {}
         try:
+            # Ensure output directory exists (especially in GitHub Actions)
+            os.makedirs(OUTPUT_DIR, exist_ok=True)
+            
             timestamp_str = datetime.now(LOCAL_TIMEZONE).strftime('%Y%m%d_%H%M%S')
             
             # 1. Store-Level Details CSV
