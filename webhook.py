@@ -336,8 +336,35 @@ async def post_quick_actions_card(chat_webhook_url: str, apps_script_url: str, d
             }]
         }
 
+        max_attempts = 3
+        backoff_seconds = [1, 2, 4]
+
         async with aiohttp.ClientSession() as session:
-            await session.post(chat_webhook_url, json=payload)
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    async with session.post(chat_webhook_url, json=payload) as response:
+                        if response.status < 300:
+                            return
+
+                        response_body = await response.text()
+                        app_logger.warning(
+                            f"Quick actions card POST returned status {response.status} (attempt {attempt}/{max_attempts}). "
+                            f"Response: {response_body}"
+                        )
+                except Exception as request_error:
+                    app_logger.error(
+                        f"Error posting quick actions card (attempt {attempt}/{max_attempts}): {request_error}",
+                        exc_info=debug_mode,
+                    )
+
+                if attempt < max_attempts:
+                    sleep_seconds = backoff_seconds[attempt - 1]
+                    app_logger.info(
+                        f"Retrying quick actions card post in {sleep_seconds} seconds (attempt {attempt + 1}/{max_attempts})"
+                    )
+                    await asyncio.sleep(sleep_seconds)
+
+            raise RuntimeError("Failed to post quick actions card after retrying")
 
     except Exception as e:
         app_logger.error(f"Error posting quick actions card: {e}", exc_info=debug_mode)
