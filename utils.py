@@ -55,6 +55,26 @@ def sanitize_store_name(name: str, store_prefix_re) -> str:
     return store_prefix_re.sub("", name).strip()
 
 
+def sanitize_csv_value(value):
+    """Ensure CSV values do not introduce malformed rows.
+
+    Replaces any newline or carriage return characters with spaces and
+    trims surrounding whitespace. ``None`` values are converted to an
+    empty string, while numeric types are returned as-is to preserve
+    their type in the CSV output.
+    """
+
+    if value is None:
+        return ""
+
+    if isinstance(value, (int, float)):
+        return value
+
+    text_value = str(value)
+    text_value = text_value.replace("\r", " ").replace("\n", " ")
+    return text_value.strip()
+
+
 async def _save_screenshot(page: Page | None, prefix: str, output_dir: str, local_timezone, app_logger):
     if not page or page.is_closed():
         app_logger.warning(f"Cannot save screenshot '{prefix}': Page is closed or unavailable.")

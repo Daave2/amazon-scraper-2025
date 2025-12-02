@@ -16,7 +16,15 @@ from pytz import timezone
 from urllib.parse import urlencode
 
 # Import modules
-from utils import setup_logging, sanitize_store_name, _save_screenshot, load_default_data, ensure_storage_state, LOCAL_TIMEZONE
+from utils import (
+    setup_logging,
+    sanitize_store_name,
+    sanitize_csv_value,
+    _save_screenshot,
+    load_default_data,
+    ensure_storage_state,
+    LOCAL_TIMEZONE,
+)
 from auth import check_if_login_needed, perform_login_and_otp, prime_master_session
 from workers import auto_concurrency_manager
 from stock_enrichment import enrich_items_with_stock_data
@@ -983,6 +991,7 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
                             'product_status': item.get('product_status', ''),
                             'commercially_active': item.get('commercially_active', '')
                         }
+                        row = {key: sanitize_csv_value(value) for key, value in row.items()}
                         writer.writerow(row)
             
             app_logger.info(f"Store-level CSV exported to: {store_csv_path}")
@@ -1023,6 +1032,7 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
                         'price': item.get('price', ''),
                         'barcode': item.get('barcode', '')
                     }
+                    row = {key: sanitize_csv_value(value) for key, value in row.items()}
                     writer.writerow(row)
             
             app_logger.info(f"Network summary CSV exported to: {network_csv_path}")
