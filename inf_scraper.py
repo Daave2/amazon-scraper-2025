@@ -807,6 +807,9 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         
         # Use overridden config if provided, otherwise use global config
         active_config = config_override if config_override else config
+        apps_script_url = active_config.get('apps_script_webhook_url') or APPS_SCRIPT_URL
+        skip_network = target_stores is not None
+        should_post_quick_actions = (not skip_network) and bool(CHAT_WEBHOOK_URL) and bool(apps_script_url)
 
         # Create date range function (same as main scraper)
         def get_date_range():
@@ -1026,20 +1029,21 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             app_logger.error(f"Error exporting CSV files: {e}")
         
         # Send Report - skip network-wide report if called from main scraper with specific stores
-        skip_network = target_stores is not None
         top_n = active_config.get('top_n_items', 5)  # Default to 5 if not specified
         await send_inf_report(results_list, network_top_10, skip_network_report=skip_network, title_prefix=title_prefix, top_n=top_n, csv_urls=csv_urls if csv_urls else None)
-        
 
-
-        # Send Quick Actions card if not skipped (i.e., standalone run)
-        # Send Quick Actions card if not skipped (i.e., standalone run)
-        apps_script_url = active_config.get('apps_script_webhook_url') or APPS_SCRIPT_URL
-        if not skip_network and apps_script_url:
-            from webhook import post_quick_actions_card
-            await post_quick_actions_card(CHAT_WEBHOOK_URL, apps_script_url, DEBUG_MODE, app_logger)
-        
     finally:
+        # Always try to post the quick actions card when applicable so users see buttons even if earlier steps hiccuped
+        if should_post_quick_actions:
+            try:
+                from webhook import post_quick_actions_card
+                app_logger.info("Posting quick actions card for follow-up workflows")
+                await post_quick_actions_card(CHAT_WEBHOOK_URL, apps_script_url, DEBUG_MODE, app_logger)
+            except Exception as quick_actions_error:
+                app_logger.error(f"Failed to post quick actions card: {quick_actions_error}", exc_info=DEBUG_MODE)
+        elif not apps_script_url:
+            app_logger.info("Skipping quick actions card because apps_script_webhook_url is not configured")
+
         if local_playwright:
             if browser: await browser.close()
             await local_playwright.stop()
