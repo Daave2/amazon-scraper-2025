@@ -884,11 +884,11 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
                 aggregated[key]['stores'][store_name] = 0
             aggregated[key]['stores'][store_name] += item['inf']
             
-        # Build network list with top 3 contributing stores
+        # Build network list with top contributing stores (up to 10)
         network_list = []
         for (sku, name), data in aggregated.items():
             # Sort stores by INF contribution
-            top_stores = sorted(data['stores'].items(), key=lambda x: x[1], reverse=True)[:3]
+            top_stores = sorted(data['stores'].items(), key=lambda x: x[1], reverse=True)[:10]
             
             network_list.append({
                 "sku": sku,
