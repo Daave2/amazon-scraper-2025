@@ -73,6 +73,73 @@ COOLDOWN_SECONDS = AUTO_CONF.get('cooldown_seconds', 15)
 
 INF_PAGE_URL = "https://sellercentral.amazon.co.uk/snow-inventory/inventoryinsights/ref=xx_infr_dnav_xx"
 
+def upload_csv_to_gist(csv_file_path: str, description: str) -> str:
+    """
+    Upload a CSV file to GitHub Gist and return the raw file URL.
+    Only works when running in GitHub Actions (GITHUB_TOKEN available).
+    
+    Args:
+        csv_file_path: Path to the CSV file
+        description: Description for the Gist
+        
+    Returns:
+        Raw file URL of the uploaded Gist, or empty string on failure
+    """
+    import requests
+    
+    # Check if running in GitHub Actions
+    github_token = os.environ.get('GITHUB_TOKEN')
+    if not github_token:
+        app_logger.debug("GITHUB_TOKEN not found - skipping Gist upload (not running in GitHub Actions)")
+        return ""
+    
+    try:
+        # Read CSV file content
+        with open(csv_file_path, 'r', encoding='utf-8') as f:
+            csv_content = f.read()
+        
+        # Get filename from path
+        filename = os.path.basename(csv_file_path)
+        
+        # Prepare Gist payload
+        gist_data = {
+            "description": description,
+            "public": True,
+            "files": {
+                filename: {
+                    "content": csv_content
+                }
+            }
+        }
+        
+        # Upload to GitHub
+        headers = {
+            "Authorization": f"token {github_token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        
+        response = requests.post(
+            "https://api.github.com/gists",
+            headers=headers,
+            json=gist_data,
+            timeout=30
+        )
+        
+        if response.status_code == 201:
+            gist_data = response.json()
+            # Get the raw URL for direct CSV download
+            raw_url = gist_data['files'][filename]['raw_url']
+            app_logger.info(f"Successfully uploaded {filename} to Gist: {raw_url}")
+            return raw_url
+        else:
+            app_logger.error(f"Failed to upload Gist: {response.status_code} - {response.text}")
+            return ""
+            
+    except Exception as e:
+        app_logger.error(f"Error uploading CSV to Gist: {e}")
+        return ""
+
+
 async def navigate_and_extract_inf(page: Page, store_name: str):
     """Extract INF data from the already-loaded INF page"""
     app_logger.info(f"Extracting INF data for: {store_name}")
@@ -269,7 +336,7 @@ def generate_qr_code_data_url(sku: str) -> str:
         return ""
 
 
-async def send_inf_report(store_data, network_top_10, skip_network_report=False, title_prefix="", top_n=5):
+async def send_inf_report(store_data, network_top_10, skip_network_report=False, title_prefix="", top_n=5, csv_urls=None):
     """Send INF report to Google Chat
     
     Args:
@@ -278,6 +345,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
         skip_network_report: If True, skip sending the network-wide summary
         title_prefix: Optional prefix for the report title (e.g. "Yesterday's ")
         top_n: Number of top items to show per store (5, 10, 25)
+        csv_urls: Optional dict with CSV download URLs (keys: 'store_details', 'network_summary')
     """
     import aiohttp
     import ssl
@@ -324,6 +392,42 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
             widgets_network.append({"textParagraph": {"text": text}})
             
         sections_network.append({"widgets": widgets_network})
+        
+        # Add CSV Downloads section if URLs are available
+        if csv_urls and (csv_urls.get('store_details') or csv_urls.get('network_summary')):
+            csv_buttons = []
+            
+            if csv_urls.get('store_details'):
+                csv_buttons.append({
+                    "text": "📥 Download Store Details CSV",
+                    "onClick": {
+                        "openLink": {
+                            "url": csv_urls['store_details']
+                        }
+                    }
+                })
+            
+            if csv_urls.get('network_summary'):
+                csv_buttons.append({
+                    "text": "📥 Download Network Summary CSV",
+                    "onClick": {
+                        "openLink": {
+                            "url": csv_urls['network_summary']
+                        }
+                    }
+                })
+            
+            if csv_buttons:
+                sections_network.append({
+                    "header": "📊 Download CSV Data",
+                    "widgets": [
+                        {
+                            "buttonList": {
+                                "buttons": csv_buttons
+                            }
+                        }
+                    ]
+                })
         
         # Add Quick Actions if Apps Script URL is available
         if APPS_SCRIPT_URL:
@@ -822,11 +926,109 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
                 except:
                     title_prefix = "Custom Range "
 
+        # Export to CSV (will then send report with CSV links)
+        csv_urls = {}
+        try:
+            timestamp_str = datetime.now(LOCAL_TIMEZONE).strftime('%Y%m%d_%H%M%S')
+            
+            # 1. Store-Level Details CSV
+            store_csv_path = os.path.join(OUTPUT_DIR, f'inf_store_details_{timestamp_str}.csv')
+            store_fieldnames = [
+                'timestamp', 'store_name', 'store_number', 'sku', 'product_name', 
+                'inf_count', 'inf_rate', 'image_url', 'price', 'barcode',
+                'stock_on_hand', 'stock_unit', 'stock_last_updated',
+                'std_location', 'promo_location', 'product_status', 'commercially_active'
+            ]
+            
+            with open(store_csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=store_fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                
+                for store_name, store_number, items, inf_rate in results_list:
+                    for item in items:
+                        row = {
+                            'timestamp': datetime.now(LOCAL_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S'),
+                            'store_name': store_name,
+                            'store_number': store_number or '',
+                            'sku': item.get('sku', ''),
+                            'product_name': item.get('name', ''),
+                            'inf_count': item.get('inf', 0),
+                            'inf_rate': inf_rate if inf_rate != 'N/A' else '',
+                            'image_url': item.get('image_url', ''),
+                            'price': item.get('price', ''),
+                            'barcode': item.get('barcode', ''),
+                            'stock_on_hand': item.get('stock_on_hand', ''),
+                            'stock_unit': item.get('stock_unit', ''),
+                            'stock_last_updated': item.get('stock_last_updated', ''),
+                            'std_location': item.get('std_location', ''),
+                            'promo_location': item.get('promo_location', ''),
+                            'product_status': item.get('product_status', ''),
+                            'commercially_active': item.get('commercially_active', '')
+                        }
+                        writer.writerow(row)
+            
+            app_logger.info(f"Store-level CSV exported to: {store_csv_path}")
+            
+            # 2. Network-Wide Summary CSV
+            network_csv_path = os.path.join(OUTPUT_DIR, f'inf_network_summary_{timestamp_str}.csv')
+            network_fieldnames = [
+                'timestamp', 'rank', 'sku', 'product_name', 'total_inf_count', 
+                'store_count', 'top_contributing_stores', 'image_url', 'price', 'barcode'
+            ]
+            
+            with open(network_csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=network_fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                
+                for rank, item in enumerate(network_top_10, 1):
+                    # Format top contributing stores as "Store1 (count), Store2 (count), ..."
+                    top_stores_str = ', '.join([
+                        f"{sanitize_store_name(store, STORE_PREFIX_RE)} ({count})"
+                        for store, count in item['top_stores']
+                    ])
+                    
+                    row = {
+                        'timestamp': datetime.now(LOCAL_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S'),
+                        'rank': rank,
+                        'sku': item.get('sku', ''),
+                        'product_name': item.get('name', ''),
+                        'total_inf_count': item.get('inf', 0),
+                        'store_count': item.get('store_count', 0),
+                        'top_contributing_stores': top_stores_str,
+                        'image_url': item.get('image_url', ''),
+                        'price': item.get('price', ''),
+                        'barcode': item.get('barcode', '')
+                    }
+                    writer.writerow(row)
+            
+            app_logger.info(f"Network summary CSV exported to: {network_csv_path}")
+            
+            # Upload to GitHub Gist if running in GitHub Actions
+            store_details_url = upload_csv_to_gist(
+                store_csv_path, 
+                f"INF Store Details - {datetime.now(LOCAL_TIMEZONE).strftime('%Y-%m-%d %H:%M')}"
+            )
+            network_summary_url = upload_csv_to_gist(
+                network_csv_path,
+                f"INF Network Summary - {datetime.now(LOCAL_TIMEZONE).strftime('%Y-%m-%d %H:%M')}"
+            )
+            
+            # Store URLs if available
+            if store_details_url:
+                csv_urls['store_details'] = store_details_url
+            if network_summary_url:
+                csv_urls['network_summary'] = network_summary_url
+            
+        except Exception as e:
+            app_logger.error(f"Error exporting CSV files: {e}")
+        
         # Send Report - skip network-wide report if called from main scraper with specific stores
         skip_network = target_stores is not None
         top_n = active_config.get('top_n_items', 5)  # Default to 5 if not specified
-        await send_inf_report(results_list, network_top_10, skip_network_report=skip_network, title_prefix=title_prefix, top_n=top_n)
+        await send_inf_report(results_list, network_top_10, skip_network_report=skip_network, title_prefix=title_prefix, top_n=top_n, csv_urls=csv_urls if csv_urls else None)
         
+
+
         # Send Quick Actions card if not skipped (i.e., standalone run)
         # Send Quick Actions card if not skipped (i.e., standalone run)
         apps_script_url = active_config.get('apps_script_webhook_url') or APPS_SCRIPT_URL
