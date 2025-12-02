@@ -13,7 +13,7 @@ from asyncio import Queue, Lock, Condition
 from playwright.async_api import async_playwright, Page, TimeoutError, expect, Browser
 import qrcode
 from pytz import timezone
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 
 # Import modules
 from utils import setup_logging, sanitize_store_name, _save_screenshot, load_default_data, ensure_storage_state, LOCAL_TIMEZONE
@@ -395,10 +395,21 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
             for store_name, inf_count in item['top_stores']:
                 clean_name = sanitize_store_name(store_name, STORE_PREFIX_RE)
                 top_stores_formatted.append(f"{clean_name} {inf_count}")
-            
+
             stores_text = ", ".join(top_stores_formatted)
             store_summary = f"({item['store_count']} stores: {stores_text})"
-            
+
+            store_list_content = ""
+            store_list_url = ""
+            if item.get('stores_full'):
+                store_lines = []
+                for store_name, inf_count in item['stores_full']:
+                    clean_store_name = sanitize_store_name(store_name, STORE_PREFIX_RE)
+                    store_lines.append(f"{clean_store_name} - {inf_count} INF")
+
+                store_list_content = f"{item['name']} - All INF Stores\n" + "\n".join(store_lines)
+                store_list_url = f"data:text/plain;charset=utf-8,{quote(store_list_content)}"
+
             # Build text with INF count, product name, and store breakdown
             text = f"<b>{item['inf']}</b> - {item['name']}<br>"
             text += f"<font color='#666666'>{store_summary}</font>"
@@ -412,8 +423,22 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
             
             if details:
                 text += f"<br><font color='#888888'>{' | '.join(details)}</font>"
-            
+
             widgets_network.append({"textParagraph": {"text": text}})
+
+            if store_list_url:
+                widgets_network.append({
+                    "buttonList": {
+                        "buttons": [{
+                            "textButton": {
+                                "text": "View all stores",
+                                "onClick": {
+                                    "openLink": {"url": store_list_url}
+                                }
+                            }
+                        }]
+                    }
+                })
             
         sections_network.append({"widgets": widgets_network})
         
@@ -877,13 +902,15 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         network_list = []
         for (sku, name), data in aggregated.items():
             # Sort stores by INF contribution
-            top_stores = sorted(data['stores'].items(), key=lambda x: x[1], reverse=True)[:3]
-            
+            sorted_stores = sorted(data['stores'].items(), key=lambda x: x[1], reverse=True)
+            top_stores = sorted_stores[:3]
+
             network_list.append({
                 "sku": sku,
                 "name": name,
                 "inf": data['total_inf'],
                 "top_stores": top_stores,  # [(store_name, inf_count), ...]
+                "stores_full": sorted_stores,
                 "store_count": len(data['stores']),
                 "image_url": data['image_url'],
                 "barcode": data['barcode'],
