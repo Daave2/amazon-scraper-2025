@@ -513,13 +513,13 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
     stores_with_data = [(name, num, items, inf_rate) for name, num, items, inf_rate in sorted_store_data if items]
     
     # Dynamic batch size based on items shown
-    # More items per store = fewer stores per batch to avoid payload limits
+    # With simplified text-only format (no images/QR codes), we can fit MANY more stores per batch
     if top_n <= 5:
-        BATCH_SIZE = 8  # Reduced from 10 for safety
+        BATCH_SIZE = 30  # Was 8 - much smaller payloads now with text-only format
     elif top_n <= 10:
-        BATCH_SIZE = 4  # Reduced from 7 due to payload errors
+        BATCH_SIZE = 20  # Was 4 - simplified cards allow more stores
     else:  # top_n >= 25
-        BATCH_SIZE = 3
+        BATCH_SIZE = 15  # Was 3 - even with 25 items, text is tiny compared to images
     
     batches = [stores_with_data[i:i + BATCH_SIZE] for i in range(0, len(stores_with_data), BATCH_SIZE)]
     
@@ -535,165 +535,47 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
             inf_display = f"INF: {inf_rate}" if inf_rate != 'N/A' else f"Total INF: {total_inf}"
             section_header = f"{clean_store_name} | {inf_display}"
             
-            # Show top N items with card layout
+            # Build product list text (no images/QR codes)
+            product_lines = []
             for item in items[:top_n]:
-                # Build Columns Widget
-                img_url = item.get('image_url', '')
-                sku = item['sku']
-                
-                # Text Details (Left Column)
-                details = f"<b>{item['name']}</b>\n\n"
-                details += f"🔴 <b>INF Count: {item['inf']}</b>\n"
-                details += f"📦 SKU: <font color='#1a73e8'>{sku}</font>\n"
-                
-                # Add barcode if available
-                if item.get('barcode'):
-                    details += f"🔢 EAN: {item['barcode']}\n"
+                line = f"• <b>{item['name']}</b>"
+                line += f" - <b>{item['inf']}</b> INF"
+                line += f" (SKU: {item['sku']})"
                 
                 # Add price if available
                 if item.get('price') is not None:
-                    details += f"💷 £{item['price']:.2f}\n"
+                    line += f" - £{item['price']:.2f}"
                 
-                # Add discontinuation warning if product is not active
-                # Only show if:
-                # 1. We have valid status data from API (not None)
-                # 2. Item has no location (if it has a location, it's still ranged)
-                # 3. Status indicates discontinued
-                has_location = item.get('std_location') or item.get('promo_location')
-                has_status_data = item.get('product_status') is not None or item.get('commercially_active') is not None
-                is_discontinued = item.get('product_status') != 'A' and item.get('commercially_active') != 'Yes'
-                
-                if has_status_data and not has_location and is_discontinued:
-                    details += f"\n🚫 <b><font color='#d93025'>DISCONTINUED/NOT RANGED</font></b>"
-                
-                if ENRICH_STOCK_DATA:
-                    stock_qty = item.get('stock_on_hand')
-                    if stock_qty is not None:
-                        stock_unit = item.get('stock_unit', '')
-                        details += f"\n📊 Stock: {stock_qty} {stock_unit}"
-                        
-                        if item.get('stock_last_updated'):
-                            # Format timestamp if needed, or just display
-                            # Assuming ISO format or similar readable string from API
-                            ts = item['stock_last_updated']
-                            # Try to make it more readable if it's a long ISO string
-                            try:
-                                dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
-                                ts_display = dt.strftime("%H:%M")
-                                details += f" (at {ts_display})"
-                            except:
-                                pass # Keep silent if parsing fails
-                    else:
-                        details += f"\n📊 Stock: Not Found"
-                
-                if item.get('std_location'):
-                    details += f"\n📍 {item['std_location']}"
-                
-                if item.get('promo_location'):
-                    details += f"\n🏷️ {item['promo_location']}"
-                
-                # Column 1: Text Details (LEFT)
-                col1_widgets = [{
+                product_lines.append(line)
+            
+            # Add product list as single text paragraph
+            if product_lines:
+                widgets_store.append({
                     "textParagraph": {
-                        "text": details
+                        "text": "\n".join(product_lines)
                     }
-                }]
+                })
+            
+            # Build aggregated link to external app
+            # Format: https://amazon-product-analysis-584939250419.us-west1.run.app/#/amazon/SKU1:INF1,SKU2:INF2?locationId=066
+            if store_number and items:
+                # Build product string: SKU1:INF1,SKU2:INF2,...
+                product_params = ",".join([f"{item['sku']}:{item['inf']}" for item in items[:top_n]])
+                analysis_url = f"https://amazon-product-analysis-584939250419.us-west1.run.app/#/amazon/{product_params}?locationId={store_number}"
                 
-                # Prepare QR code URL
-                import urllib.parse
-                encoded_sku = urllib.parse.quote(sku)
-                qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=75x75&data={encoded_sku}"
-                
-                # Prepare high-res product image URL
-                high_res_url = img_url
-                if img_url:
-                    # Skip resizing for Morrisons/Brandbank images
-                    if 'brandbank' in img_url.lower():
-                        high_res_url = img_url
-                    else:
-                        # Use regex to replace any Amazon image size parameters with high-res version
-                        high_res_url = re.sub(r'_S[LXY]\d+_', '_SL500_', img_url)
-                        high_res_url = re.sub(r'_AC_UL\d+_', '_AC_UL500_', high_res_url)
-                        # If no size parameters found, try adding one
-                        if high_res_url == img_url and ('.jpg' in high_res_url or '.png' in high_res_url):
-                            high_res_url = re.sub(r'\.(jpg|png)', r'._SL500_.\1', high_res_url)
-                
-                # Build right column widgets: text details + product image
-                right_column_widgets = [
-                    {
-                        "textParagraph": {
-                            "text": details
-                        }
-                    }
-                ]
-                
-                # Add product image if available
-                if img_url:
-                    right_column_widgets.append({
-                        "image": {
-                            "imageUrl": high_res_url,
-                            "altText": f"Product image for {sku}"
-                        }
-                    })
-                
-                # Build columns layout: QR + Button (left, compact) | Details + Image (right, fill)
-                
-                # Left column widgets: QR code + inventory link button
-                left_column_widgets = [{
-                    "image": {
-                        "imageUrl": qr_url,
-                        "altText": f"QR code for SKU {sku}"
-                    }
-                }]
-                
-                # Add inventory system button if URL is configured
-                inventory_url_template = config.get('inventory_system_url')
-                if inventory_url_template:
-                    # Support both {sku} and {SKU}
-                    inventory_url = inventory_url_template.replace('{sku}', sku).replace('{SKU}', sku)
-                    # Support {store_number}
-                    if store_number:
-                        inventory_url = inventory_url.replace('{store_number}', str(store_number))
-                    else:
-                        # If no store number, remove the parameter if it looks like a query param
-                        # or just leave it empty/unreplaced? 
-                        # Safer to just replace with empty string or handle gracefully.
-                        # For now, let's replace with empty string to avoid {store_number} literal in URL
-                        inventory_url = inventory_url.replace('{store_number}', '')
-
-                    left_column_widgets.append({
-                        "buttonList": {
-                            "buttons": [{
-                                "text": "ℹ️ Info",
-                                "onClick": {
-                                    "openLink": {
-                                        "url": inventory_url
-                                    }
+                # Add button to view all products
+                widgets_store.append({
+                    "buttonList": {
+                        "buttons": [{
+                            "text": f"📊 View All {len(items[:top_n])} Products",
+                            "onClick": {
+                                "openLink": {
+                                    "url": analysis_url
                                 }
-                            }]
-                        }
-                    })
-                
-                columns_widget = {
-                    "columns": {
-                        "columnItems": [
-                            {
-                                "horizontalSizeStyle": "FILL_MINIMUM_SPACE",
-                                "horizontalAlignment": "CENTER",
-                                "verticalAlignment": "CENTER",
-                                "widgets": left_column_widgets
-                            },
-                            {
-                                "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
-                                "widgets": right_column_widgets
                             }
-                        ]
+                        }]
                     }
-                }
-                
-                widgets_store.append(columns_widget)
-                widgets_store.append({"divider": {}})
-
+                })
             
             # Add collapsible section
             sections_stores.append({
