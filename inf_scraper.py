@@ -214,7 +214,7 @@ async def navigate_and_extract_inf(page: Page, store_name: str):
         await _save_screenshot(page, f"error_inf_{sanitize_store_name(store_name, STORE_PREFIX_RE)}", OUTPUT_DIR, LOCAL_TIMEZONE, app_logger)
         return []
 
-async def process_store_task(context, store_info, results_list, results_lock, failure_lock, failure_timestamps, date_range_func=None, action_timeout=20000):
+async def process_store_task(context, store_info, results_list, results_lock, failure_lock, failure_timestamps, date_range_func=None, action_timeout=20000, bearer_token=None):
     merchant_id = store_info['merchant_id']
     marketplace_id = store_info['marketplace_id']
     store_name = store_info['store_name']
@@ -256,7 +256,7 @@ async def process_store_task(context, store_info, results_list, results_lock, fa
                     items, 
                     store_number, 
                     MORRISONS_API_KEY, 
-                    MORRISONS_BEARER_TOKEN
+                    bearer_token  # Use the fresh token passed as parameter
                 )
             except Exception as e:
                 app_logger.warning(f"[{store_name}] Failed to enrich with stock data: {e}")
@@ -699,6 +699,19 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
                  await page.close()
         else:
             app_logger.info("Using provided browser from main scraper (already authenticated)")
+
+        # Fetch fresh bearer token for this run (tokens expire frequently)
+        bearer_token_for_run = MORRISONS_BEARER_TOKEN  # Start with global token
+        if ENRICH_STOCK_DATA and MORRISONS_BEARER_TOKEN_URL:
+            app_logger.info("Fetching fresh bearer token for this INF run...")
+            from stock_enrichment import fetch_bearer_token_from_gist
+            fresh_token = fetch_bearer_token_from_gist(MORRISONS_BEARER_TOKEN_URL)
+            if fresh_token:
+                bearer_token_for_run = fresh_token
+                app_logger.info("Fresh bearer token successfully loaded")
+            else:
+                app_logger.warning("Failed to fetch fresh bearer token - will use global token (may be expired)")
+
 
         # Load state
         with open(STORAGE_STATE) as f:
