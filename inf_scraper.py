@@ -278,7 +278,7 @@ async def process_store_task(context, store_info, results_list, results_lock, fa
 async def worker(worker_id: int, browser: Browser, storage_state: Dict, job_queue: Queue, 
                  results_list: List, results_lock: Lock,
                  concurrency_limit_ref: dict, active_workers_ref: dict, concurrency_condition: Condition,
-                 failure_lock: Lock, failure_timestamps: List, date_range_func=None, action_timeout=20000):
+                 failure_lock: Lock, failure_timestamps: List, date_range_func=None, action_timeout=20000, bearer_token=None):
     
     app_logger.info(f"[Worker-{worker_id}] Starting...")
     context = None
@@ -300,7 +300,7 @@ async def worker(worker_id: int, browser: Browser, storage_state: Dict, job_queu
                 active_workers_ref['value'] += 1
             
             try:
-                await process_store_task(context, store_info, results_list, results_lock, failure_lock, failure_timestamps, date_range_func, action_timeout)
+                await process_store_task(context, store_info, results_list, results_lock, failure_lock, failure_timestamps, date_range_func, action_timeout, bearer_token)
             except Exception as e:
                 app_logger.error(f"[Worker-{worker_id}] Error processing store: {e}")
             finally:
@@ -763,7 +763,7 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         workers = [
             asyncio.create_task(worker(i+1, browser, storage_state, job_queue, results_list, results_lock,
                                        concurrency_limit_ref, active_workers_ref, concurrency_condition,
-                                       failure_lock, failure_timestamps, get_date_range, ACTION_TIMEOUT))
+                                       failure_lock, failure_timestamps, get_date_range, ACTION_TIMEOUT, bearer_token_for_run))
             for i in range(num_workers)
         ]
         
