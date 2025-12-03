@@ -51,11 +51,19 @@ def _fetch_json(url: str, bearer: str | None) -> Dict[str, Any] | None:
             return None  # Return None for 404s to distinguish from other errors
         # Log auth status for debugging
         auth_status = "WITH bearer token" if bearer else "WITHOUT bearer token"
-        app_logger.warning(f"HTTP error for {url} ({auth_status}): {e}")
+        
+        # For 401 errors, show more details
+        if e.response and e.response.status_code == 401:
+            response_body = e.response.text[:200] if e.response.text else "No response body"
+            app_logger.warning(f"HTTP 401 for {url} ({auth_status}): {e}")
+            app_logger.warning(f"API Error Response: {response_body}")
+        else:
+            app_logger.warning(f"HTTP error for {url} ({auth_status}): {e}")
         return None
     except Exception as e:
         app_logger.warning(f"Error fetching {url}: {e}")
         return None
+
 
 
 # --- Location Formatting Helpers ---
