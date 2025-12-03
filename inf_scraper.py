@@ -252,6 +252,9 @@ async def process_store_task(context, store_info, results_list, results_lock, fa
         if ENRICH_STOCK_DATA and store_number and items and MORRISONS_API_KEY:
             try:
                 app_logger.info(f"[{store_name}] Enriching {len(items)} items with stock data...")
+                token_status = "valid token" if bearer_token else "NO TOKEN"
+                token_preview = f"{bearer_token[:20]}..." if bearer_token and len(bearer_token) > 20 else "None"
+                app_logger.debug(f"[{store_name}] Bearer token status: {token_status} (preview: {token_preview})")
                 items = await enrich_items_with_stock_data(
                     items, 
                     store_number, 
@@ -708,9 +711,16 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             fresh_token = fetch_bearer_token_from_gist(MORRISONS_BEARER_TOKEN_URL)
             if fresh_token:
                 bearer_token_for_run = fresh_token
-                app_logger.info("Fresh bearer token successfully loaded")
+                token_preview = f"{fresh_token[:20]}..." if len(fresh_token) > 20 else fresh_token
+                app_logger.info(f"Fresh bearer token successfully loaded (preview: {token_preview})")
             else:
                 app_logger.warning("Failed to fetch fresh bearer token - will use global token (may be expired)")
+        
+        # Log final token status for debugging
+        if bearer_token_for_run:
+            app_logger.info(f"Bearer token is set and ready (length: {len(bearer_token_for_run)})")
+        else:
+            app_logger.warning("WARNING: Bearer token is None! Stock enrichment will fail with 401 errors")
 
 
         # Load state
