@@ -35,7 +35,7 @@ on:
       top_n:
         description: 'Number of top items to show per store (5, 10, or 25)'
         required: false
-        default: '5'
+        default: '10'
         type: choice
         options:
           - '5'
@@ -133,7 +133,7 @@ jobs:
           RELATIVE_DAYS="${{ github.event.client_payload.relative_days || '0' }}"
           CUSTOM_START="${{ github.event.client_payload.custom_start_date || '' }}"
           CUSTOM_END="${{ github.event.client_payload.custom_end_date || '' }}"
-          TOP_N="${{ github.event.client_payload.top_n || '5' }}"
+          TOP_N="${{ github.event.client_payload.top_n || '10' }}"
           echo "Repository dispatch trigger - INF Analysis"
           echo "Date mode: $DATE_MODE"
           echo "Top N items: $TOP_N"
@@ -148,7 +148,7 @@ jobs:
           RELATIVE_DAYS="${{ github.event.inputs.relative_days || '0' }}"
           CUSTOM_START="${{ github.event.inputs.custom_start_date || '' }}"
           CUSTOM_END="${{ github.event.inputs.custom_end_date || '' }}"
-          TOP_N="${{ github.event.inputs.top_n || '5' }}"
+          TOP_N="${{ github.event.inputs.top_n || '10' }}"
           
           # Update config with top_n setting
           jq --arg top_n "$TOP_N" '.top_n_items = ($top_n | tonumber)' config.json > config.tmp.json

@@ -42,7 +42,7 @@ function doGet(e) {
     }
     
     const dateMode = params.date_mode || 'today';
-    const topN = params.top_n || '5';
+    const topN = params.top_n || '10';
     const sender = Session.getActiveUser().getEmail(); // Securely get user email
     
     // Whitelist Check (Configurable via Script Properties)

@@ -148,7 +148,7 @@ def upload_csv_to_gist(csv_file_path: str, description: str) -> str:
         return ""
 
 
-async def navigate_and_extract_inf(page: Page, store_name: str):
+async def navigate_and_extract_inf(page: Page, store_name: str, top_n: int = 10):
     """Extract INF data from the already-loaded INF page"""
     app_logger.info(f"Extracting INF data for: {store_name}")
     
@@ -174,13 +174,13 @@ async def navigate_and_extract_inf(page: Page, store_name: str):
         except Exception as e:
             app_logger.warning(f"[{store_name}] Failed to sort: {e}")
 
-        # Extract Data - just the top 10 rows
+        # Extract Data - top N rows based on configuration
         rows = await page.locator(f"{table_sel} tr").all()
-        app_logger.info(f"[{store_name}] Found {len(rows)} rows; extracting top 10")
+        app_logger.info(f"[{store_name}] Found {len(rows)} rows; extracting top {top_n}")
         
         extracted_data = []
         
-        for i, row in enumerate(rows[:10]):
+        for i, row in enumerate(rows[:top_n]):
             try:
                 cells = row.locator("td")
                 
@@ -214,7 +214,7 @@ async def navigate_and_extract_inf(page: Page, store_name: str):
         await _save_screenshot(page, f"error_inf_{sanitize_store_name(store_name, STORE_PREFIX_RE)}", OUTPUT_DIR, LOCAL_TIMEZONE, app_logger)
         return []
 
-async def process_store_task(context, store_info, results_list, results_lock, failure_lock, failure_timestamps, date_range_func=None, action_timeout=20000, bearer_token=None):
+async def process_store_task(context, store_info, results_list, results_lock, failure_lock, failure_timestamps, date_range_func=None, action_timeout=20000, bearer_token=None, top_n=10):
     merchant_id = store_info['merchant_id']
     marketplace_id = store_info['marketplace_id']
     store_name = store_info['store_name']
@@ -246,7 +246,7 @@ async def process_store_task(context, store_info, results_list, results_lock, fa
                 app_logger.warning(f"[{store_name}] Could not apply date range to INF page, using default")
         
         # Now extract INF data
-        items = await navigate_and_extract_inf(page, store_name)
+        items = await navigate_and_extract_inf(page, store_name, top_n)
         
         # Enrich with stock data if enabled and we have a store number
         if ENRICH_STOCK_DATA and store_number and items and MORRISONS_API_KEY:
@@ -281,7 +281,7 @@ async def process_store_task(context, store_info, results_list, results_lock, fa
 async def worker(worker_id: int, browser: Browser, storage_state: Dict, job_queue: Queue, 
                  results_list: List, results_lock: Lock,
                  concurrency_limit_ref: dict, active_workers_ref: dict, concurrency_condition: Condition,
-                 failure_lock: Lock, failure_timestamps: List, date_range_func=None, action_timeout=20000, bearer_token=None):
+                 failure_lock: Lock, failure_timestamps: List, date_range_func=None, action_timeout=20000, bearer_token=None, top_n=10):
     
     app_logger.info(f"[Worker-{worker_id}] Starting...")
     context = None
@@ -303,7 +303,7 @@ async def worker(worker_id: int, browser: Browser, storage_state: Dict, job_queu
                 active_workers_ref['value'] += 1
             
             try:
-                await process_store_task(context, store_info, results_list, results_lock, failure_lock, failure_timestamps, date_range_func, action_timeout, bearer_token)
+                await process_store_task(context, store_info, results_list, results_lock, failure_lock, failure_timestamps, date_range_func, action_timeout, bearer_token, top_n)
             except Exception as e:
                 app_logger.error(f"[Worker-{worker_id}] Error processing store: {e}")
             finally:
@@ -739,6 +739,9 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         
         # Determine ACTION_TIMEOUT
         ACTION_TIMEOUT = int(PAGE_TIMEOUT / 2)
+        
+        # Get top_n for extraction (default 10)
+        top_n = active_config.get('top_n_items', 10)
             
         # Setup Queue
         job_queue = Queue()
@@ -773,7 +776,7 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         workers = [
             asyncio.create_task(worker(i+1, browser, storage_state, job_queue, results_list, results_lock,
                                        concurrency_limit_ref, active_workers_ref, concurrency_condition,
-                                       failure_lock, failure_timestamps, get_date_range, ACTION_TIMEOUT, bearer_token_for_run))
+                                       failure_lock, failure_timestamps, get_date_range, ACTION_TIMEOUT, bearer_token_for_run, top_n))
             for i in range(num_workers)
         ]
         
@@ -966,7 +969,7 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             app_logger.error(f"Error exporting CSV files: {e}")
         
         # Send Report - skip network-wide report if called from main scraper with specific stores
-        top_n = active_config.get('top_n_items', 5)  # Default to 5 if not specified
+        # (top_n is already defined earlier in this function)
         await send_inf_report(results_list, network_top_10, skip_network_report=skip_network, title_prefix=title_prefix, top_n=top_n, csv_urls=csv_urls if csv_urls else None)
 
     finally:
