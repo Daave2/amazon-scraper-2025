@@ -379,7 +379,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
         for item in network_top_10:
             # Build clean store name without prefix
             top_stores_formatted = []
-            for store_name, inf_count in item['top_stores']:
+            for store_name, inf_count, store_number in item['top_stores']:
                 clean_name = sanitize_store_name(store_name, STORE_PREFIX_RE)
                 top_stores_formatted.append(f"{clean_name} {inf_count}")
             
@@ -401,6 +401,42 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                 text += f"<br><font color='#888888'>{' | '.join(details)}</font>"
             
             widgets_network.append({"textParagraph": {"text": text}})
+        
+        # Build Network Analysis URL for all top 10 items
+        # Format: /network/SKU:StoreId=InfCount:StoreId=InfCount,NextSKU:StoreId=InfCount...
+        inventory_url = config.get('inventory_system_url', '')
+        if inventory_url and network_top_10:
+            # Extract base URL (e.g., https://app.218.team from https://app.218.team/assistant/{sku}...)
+            base_url = inventory_url.split('/assistant/')[0] if '/assistant/' in inventory_url else ''
+            
+            if base_url:
+                network_payload_parts = []
+                for item in network_top_10:
+                    sku = item['sku']
+                    store_parts = []
+                    for store_name, inf_count, store_number in item['top_stores']:
+                        if store_number:  # Only include stores with valid store numbers
+                            store_parts.append(f"{store_number}={inf_count}")
+                    
+                    if store_parts:
+                        # Format: SKU:StoreId=InfCount:StoreId=InfCount
+                        sku_payload = f"{sku}:" + ":".join(store_parts)
+                        network_payload_parts.append(sku_payload)
+                
+                if network_payload_parts:
+                    network_url = f"{base_url}/network/{','.join(network_payload_parts)}"
+                    widgets_network.append({
+                        "buttonList": {
+                            "buttons": [{
+                                "text": "🌐 View Network Analysis",
+                                "onClick": {
+                                    "openLink": {
+                                        "url": network_url
+                                    }
+                                }
+                            }]
+                        }
+                    })
             
         sections_network.append({"widgets": widgets_network})
         
@@ -566,17 +602,27 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                 product_params = ",".join([f"{item['sku']}:{item['inf']}" for item in items[:top_n]])
                 analysis_url = f"https://amazon-product-analysis-584939250419.us-west1.run.app/#/amazon/{product_params}?locationId={store_number}"
                 
-                # Add button to view all products
+                # Add buttons: View Products and Auto PDF
                 widgets_store.append({
                     "buttonList": {
-                        "buttons": [{
-                            "text": f"📊 View All {len(items[:top_n])} Products",
-                            "onClick": {
-                                "openLink": {
-                                    "url": analysis_url
+                        "buttons": [
+                            {
+                                "text": f"📊 View All {len(items[:top_n])} Products",
+                                "onClick": {
+                                    "openLink": {
+                                        "url": analysis_url
+                                    }
+                                }
+                            },
+                            {
+                                "text": "📄 Auto PDF",
+                                "onClick": {
+                                    "openLink": {
+                                        "url": f"{analysis_url}&pdf"
+                                    }
                                 }
                             }
-                        }]
+                        ]
                     }
                 })
             
@@ -786,7 +832,13 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
         # results_list contains tuples of (store_name, store_number, items, inf_rate)
         all_items = []
         
+        # Build a mapping of store_name -> store_number for network analysis URLs
+        store_number_map = {}
         for store_name, store_number, items, inf_rate in results_list:
+            store_number_map[store_name] = store_number
+            # Add store_number to each item for tracking
+            for item in items:
+                item['store_number'] = store_number
             all_items.extend(items)
         
         # Calculate Network Wide Top 25 with store breakdown
@@ -796,32 +848,35 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
             if key not in aggregated:
                 aggregated[key] = {
                     'total_inf': 0,
-                    'stores': {},  # store_name -> inf_count
+                    'stores': {},  # store_name -> {'inf': count, 'store_number': number}
                     'image_url': item.get('image_url', ''),
                     'barcode': item.get('barcode'),
                     'price': item.get('price')
                 }
             aggregated[key]['total_inf'] += item['inf']
             
-            # Track store contribution
+            # Track store contribution with store number
             store_name = item['store']
+            store_number = item.get('store_number', '')
             if store_name not in aggregated[key]['stores']:
-                aggregated[key]['stores'][store_name] = 0
-            aggregated[key]['stores'][store_name] += item['inf']
+                aggregated[key]['stores'][store_name] = {'inf': 0, 'store_number': store_number}
+            aggregated[key]['stores'][store_name]['inf'] += item['inf']
             
         # Build network list with top contributing stores (up to 10) and all stores for CSV
         network_list = []
         for (sku, name), data in aggregated.items():
-            # Sort stores by INF contribution
-            sorted_stores = sorted(data['stores'].items(), key=lambda x: x[1], reverse=True)
-            top_stores = sorted_stores[:10]
+            # Sort stores by INF contribution - now stores is dict with 'inf' and 'store_number'
+            sorted_stores = sorted(data['stores'].items(), key=lambda x: x[1]['inf'], reverse=True)
+            # Convert to list of tuples: (store_name, inf_count, store_number)
+            top_stores = [(name, info['inf'], info['store_number']) for name, info in sorted_stores[:10]]
+            all_stores = [(name, info['inf'], info['store_number']) for name, info in sorted_stores]
 
             network_list.append({
                 "sku": sku,
                 "name": name,
                 "inf": data['total_inf'],
-                "top_stores": top_stores,  # [(store_name, inf_count), ...]
-                "all_stores": sorted_stores,
+                "top_stores": top_stores,  # [(store_name, inf_count, store_number), ...]
+                "all_stores": all_stores,
                 "store_count": len(data['stores']),
                 "image_url": data['image_url'],
                 "barcode": data['barcode'],
@@ -921,14 +976,15 @@ async def run_inf_analysis(target_stores: List[Dict] = None, provided_browser: B
                 
                 for rank, item in enumerate(network_top_25, 1):
                     # Format top contributing stores as "Store1 (count), Store2 (count), ..."
+                    # Note: top_stores is now (store_name, inf_count, store_number)
                     top_stores_str = ', '.join([
                         f"{sanitize_store_name(store, STORE_PREFIX_RE)} ({count})"
-                        for store, count in item['top_stores']
+                        for store, count, _ in item['top_stores']
                     ])
 
                     all_stores_str = ', '.join([
                         f"{sanitize_store_name(store, STORE_PREFIX_RE)} ({count})"
-                        for store, count in item.get('all_stores', [])
+                        for store, count, _ in item.get('all_stores', [])
                     ])
 
                     row = {
