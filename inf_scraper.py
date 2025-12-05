@@ -424,7 +424,7 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                         network_payload_parts.append(sku_payload)
                 
                 if network_payload_parts:
-                    network_url = f"{base_url}/network/{','.join(network_payload_parts)}"
+                    network_url = f"{base_url}/#/network/{','.join(network_payload_parts)}"
                     widgets_network.append({
                         "buttonList": {
                             "buttons": [{
