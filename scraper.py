@@ -248,13 +248,9 @@ async def process_urls():
 
     if args.inf_only:
         app_logger.info("INF ONLY mode enabled. Skipping dashboard scraping.")
-        # Load all stores
-        all_stores = []
-        load_default_data(all_stores, app_logger)
-        if all_stores:
-             await run_inf_analysis(all_stores, browser, config)
-        else:
-             app_logger.error("No stores found for INF analysis.")
+        # Pass None for target_stores so the full network summary and quick actions are included
+        # The INF scraper will load stores internally when target_stores is None
+        await run_inf_analysis(None, browser, config)
         return
 
     with open(STORAGE_STATE) as f: storage_template = json.load(f)
