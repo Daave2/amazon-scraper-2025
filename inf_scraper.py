@@ -595,36 +595,41 @@ async def send_inf_report(store_data, network_top_10, skip_network_report=False,
                     }
                 })
             
-            # Build aggregated link to external app
-            # Format: https://amazon-product-analysis-584939250419.us-west1.run.app/#/amazon/SKU1:INF1,SKU2:INF2?locationId=066
-            if store_number and items:
-                # Build product string: SKU1:INF1,SKU2:INF2,...
-                product_params = ",".join([f"{item['sku']}:{item['inf']}" for item in items[:top_n]])
-                analysis_url = f"https://amazon-product-analysis-584939250419.us-west1.run.app/#/amazon/{product_params}?locationId={store_number}"
+            # Build aggregated link to external app using inventory_system_url from config
+            # Format: https://app.218.team/#/amazon/SKU1:INF1,SKU2:INF2?locationId=066
+            inventory_url = config.get('inventory_system_url', '')
+            if store_number and items and inventory_url:
+                # Extract base URL (e.g., https://app.218.team from https://app.218.team/assistant/{sku}...)
+                base_url = inventory_url.split('/assistant/')[0] if '/assistant/' in inventory_url else ''
                 
-                # Add buttons: View Products and Auto PDF
-                widgets_store.append({
-                    "buttonList": {
-                        "buttons": [
-                            {
-                                "text": f"📊 View All {len(items[:top_n])} Products",
-                                "onClick": {
-                                    "openLink": {
-                                        "url": analysis_url
+                if base_url:
+                    # Build product string: SKU1:INF1,SKU2:INF2,...
+                    product_params = ",".join([f"{item['sku']}:{item['inf']}" for item in items[:top_n]])
+                    analysis_url = f"{base_url}/#/amazon/{product_params}?locationId={store_number}"
+                    
+                    # Add buttons: View Products and Auto PDF
+                    widgets_store.append({
+                        "buttonList": {
+                            "buttons": [
+                                {
+                                    "text": f"📊 View All {len(items[:top_n])} Products",
+                                    "onClick": {
+                                        "openLink": {
+                                            "url": analysis_url
+                                        }
+                                    }
+                                },
+                                {
+                                    "text": "📄 Auto PDF",
+                                    "onClick": {
+                                        "openLink": {
+                                            "url": f"{analysis_url}&pdf"
+                                        }
                                     }
                                 }
-                            },
-                            {
-                                "text": "📄 Auto PDF",
-                                "onClick": {
-                                    "openLink": {
-                                        "url": f"{analysis_url}&pdf"
-                                    }
-                                }
-                            }
-                        ]
-                    }
-                })
+                            ]
+                        }
+                    })
             
             # Add collapsible section
             sections_stores.append({
