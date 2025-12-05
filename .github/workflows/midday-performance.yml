@@ -82,7 +82,7 @@ jobs:
           "morrisons_api_key": "${MORRISONS_API_KEY}",
           "morrisons_bearer_token_url": "${MORRISONS_BEARER_TOKEN_URL}",
           "enrich_stock_data": true,
-          "inventory_system_url": "https://app.218.team/assistant/{sku}?locationId={store_number}"
+          "inventory_system_url": "https://amazon-product-analysis-584939250419.us-west1.run.app/assistant/{sku}?locationId={store_number}"
         }
         JSON
 
