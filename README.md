@@ -1,10 +1,7 @@
 # Amazon Seller Central Scraper
 
-An advanced, asynchronous scraper built with Playwright that automates data collection from Amazon Seller Central. It extracts dashboard metrics for multiple stores, performs deep-dive INF (Item Not Found) analysis, enriches data with real-time stock information, and delivers intelligent reports via Google Chat.
 
 The scraper can run locally or through GitHub Actions with scheduled automation.
-
-https://github.com/user-attachments/assets/7ba7f0f6-4d0b-4cc2-9937-de5ad766fea4
 
 ## Table of Contents
 
@@ -17,7 +14,6 @@ https://github.com/user-attachments/assets/7ba7f0f6-4d0b-4cc2-9937-de5ad766fea4
 - [GitHub Actions Workflow](#github-actions-workflow)
 - [Configuration Reference](#configuration-reference)
 - [INF Analysis](#inf-analysis)
-- [Stock Enrichment](#stock-enrichment)
 - [Google Chat Reporting](#google-chat-reporting)
 - [Testing](#testing)
 - [Notes](#notes)
@@ -25,27 +21,10 @@ https://github.com/user-attachments/assets/7ba7f0f6-4d0b-4cc2-9937-de5ad766fea4
 ## Key Features
 
 ### 🤖 **Automated Data Collection**
-- Automates Amazon Seller Central sign-in with two-factor authentication (OTP)
 - Collects key performance metrics for multiple stores from `urls.csv`
 - Submits data to Google Forms for aggregation in Google Sheets
 - **Flexible date filtering**: Today, Yesterday, Last 7/30 days, Week-to-Date, or custom ranges
 - **Smart defaults**: Performance dashboard uses today's data; configurable via CLI or workflows
-
-### 📊 **Enhanced INF Analysis**
-- Automatically identifies bottom 10 stores by INF rate for deep-dive analysis
-- **Configurable depth**: Show top 5, 10, or 25 items per store (via workflow or `--top-n` CLI)
-- Displays product images, SKU details, and INF occurrence counts
-- **Real-time enrichment**: Price, barcode (EAN), stock levels, and location data
-- **Smart alerts**: Visual warnings for discontinued/not-ranged items
-- Report titles dynamically reflect date range and timestamp
-
-### 🏪 **Morrisons Stock Integration** 
-- Real-time stock level lookup via Morrisons API
-- **Comprehensive data**: Stock quantity, unit, last updated timestamp
-- **Dual location tracking**: Standard shelf location + promotional displays
-- **Product details**: Barcode (EAN), price, active/discontinued status
-- Supports multi-component products with fallback SKU logic
-- Bearer token authentication with automatic refresh from GitHub Gist
 
 ### 📱 **Rich Google Chat Reporting**
 - Batch-grouped collapsible cards with alphabetized store listings
@@ -138,9 +117,6 @@ Edit `config.json` with your credentials:
   "otp_secret_key": "YOUR_OTP_SECRET",
   "form_url": "https://docs.google.com/forms/.../formResponse",
   "chat_webhook_url": "https://chat.googleapis.com/...",
-  "morrisons_api_key": "YOUR_API_KEY",
-  "morrisons_bearer_token_url": "https://gist.githubusercontent.com/.../raw/...",
-  "enrich_stock_data": true
 }
 ```
 
@@ -253,34 +229,15 @@ See [`docs/ON_DEMAND_TRIGGERS.md`](docs/ON_DEMAND_TRIGGERS.md) for setup and usa
 
 Configure these in **Settings → Secrets and variables → Actions**:
 
-- `FORM_URL` - Google Form submission URL
-- `LOGIN_URL` - Amazon Seller Central login URL
-- `SECRET_KEY` - Encryption key for sensitive data
-- `LOGIN_EMAIL` - Your Amazon account email
-- `LOGIN_PASSWORD` - Your Amazon account password
-- `OTP_SECRET_KEY` - TOTP secret for 2FA
-- `CHAT_WEBHOOK_URL` - Google Chat webhook URL  
-- `APPS_SCRIPT_WEBHOOK_URL` - Apps Script deployment URL (for on-demand triggers)
-- `MORRISONS_API_KEY` - Morrisons API key
-- `MORRISONS_BEARER_TOKEN_URL` - URL to fetch Morrisons bearer token (e.g., GitHub Gist)
 
 ### Artifacts
 
 - Logs and output files uploaded after each run
 - Retained for 7 days
-- Authentication state cached between runs
 
 ## Configuration Reference
 
-### Core Settings
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `login_email` | string | Amazon Seller Central email |
-| `login_password` | string | Amazon Seller Central password |
-| `otp_secret_key` | string | TOTP secret for 2FA |
-| `form_url` | string | Google Form submission URL |
-| `debug` | boolean | Enable verbose logging and screenshots |
 
 ### Performance Settings
 
@@ -317,14 +274,6 @@ Automatically adjusts concurrency based on system load.
 | `chat_webhook_url` | string | - | Google Chat webhook URL |
 | `chat_batch_size` | int | 100 | Stores per chat card |
 
-### Morrisons API (Stock Enrichment)
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `morrisons_api_key` | string | Morrisons API key |
-| `morrisons_bearer_token_url` | string | URL to fetch bearer token |
-| `enrich_stock_data` | boolean | Enable/disable stock enrichment |
-
 ### Date Range Configuration
 
 | Option | Type | Description |
@@ -339,31 +288,7 @@ Automatically adjusts concurrency based on system load.
 
 See `config.example.json` for the complete configuration schema.
 
-## INF Analysis
 
-### Automatic Triggering
-
-After main scraper completes, the system:
-1. Identifies bottom 10 stores by INF rate
-2. Automatically launches deep-dive analysis
-3. Extracts configurable number of problematic items per store (default: top 5)
-4. Enriches with Morrisons API data (price, barcode, stock, location)
-5. Sends detailed reports to Google Chat
-
-### Enhanced Reports
-
-Each INF item card displays:
-- **Product image** (300px high-resolution)
-- **Product name** (bold)
-- **SKU** (color-coded in blue)
-- **🔢 Barcode (EAN)** - Primary product barcode
-- **💷 Price** - Current retail price (if available)
-- **⚠️ INF occurrence count** (bold)
-- **🚫 Discontinuation alert** - Visual warning for inactive products (only shown when product has no location and API confirms discontinued status)
-- **📊 Stock level** - With last updated timestamp (e.g., "8 EA (at 14:30)")
-- **📍 Standard location** - Shelf location (aisle, bay, shelf)
-- **🏷️ Promotional location** - Secondary display location (if applicable)
-- **QR code** - Scannable SKU for warehouse staff
 
 ### Configurable Depth
 
@@ -388,43 +313,7 @@ Or via GitHub Actions workflow inputs:
 - Top 10: 4 stores/batch
 - Top 25: 3 stores/batch
 
-See [`docs/INF_REPORT_ENHANCEMENTS.md`](docs/INF_REPORT_ENHANCEMENTS.md) for layout details.
-
-## Stock Enrichment
-
-When enabled, the scraper enriches INF data with comprehensive product details from the Morrisons API:
-
-### Product Information
-- **🔢 Barcode (EAN)**: Primary product barcode for identification
-- **💷 Price**: Current retail price (if available in Price Integrity API)
-- **Status**: Active/discontinued indicator with visual alerts
-
-### Stock Data
-- **Quantity on hand**: Current stock level (e.g., "15 CASES")
-- **Unit of measure**: EA, CASES, etc.
-- **Last updated**: Timestamp of stock data (e.g., "14:30")
-
-### Location Data
-- **📍 Standard location**: Primary shelf location (e.g., "Aisle 5, Left bay 3, shelf 2")
-- **🏷️ Promotional location**: Secondary display location (if applicable)
-- **Aisle number**: For quick navigation
-
-### Requirements
-
-1. Morrisons API credentials configured
-2. Store numbers populated in `urls.csv`
-3. `enrich_stock_data` set to `true` in config
-
-### Performance
-
-- 3 API calls per item (Product, Stock, Price Integrity)
-- Concurrent execution via `asyncio`
-- Adds ~30-60 seconds to scraper run
-- Multi-component product support with fallback SKU logic
-
-See [`STOCK_ENRICHMENT.md`](STOCK_ENRICHMENT.md) for details.
-
-## Google Chat Reporting
+### Google Chat Reporting
 
 ### Report Types
 
@@ -469,27 +358,7 @@ Run the test suite:
 pytest
 ```
 
-This executes tests for:
-- Webhook formatting and filtering
-- Date range calculations
-- Stock enrichment API calls
 
-### Diagnostic Scripts
-
-Located in `utils/` directory:
-
-- `utils/test_morrisons_api.py` - Comprehensive Morrisons API diagnostics
-- `utils/test_morrisons_config.py` - Quick configuration validation
-
-See [`utils/README.md`](utils/README.md) for usage details.
-
-## Notes
-
-### Security
-
-- **Never commit** `config.json`, `state.json`, or `output/` to version control
-- Use GitHub Secrets for CI/CD credentials
-- Rotate API keys and tokens regularly
 
 ### Timezone
 
@@ -511,21 +380,8 @@ Check logs in `app.log` and `output/` directory for:
 
 #### Diagnostic Utilities
 
-Use the scripts in `utils/` to diagnose issues:
-
-```bash
-# Check Morrisons API configuration
-python3 utils/test_morrisons_config.py
-
-# Test Morrisons API connectivity and authentication
-python3 utils/test_morrisons_api.py
-```
-
-See [`utils/README.md`](utils/README.md) for detailed usage and troubleshooting workflows.
-
-For Morrisons API issues, see [`docs/MORRISONS_API_FIX.md`](docs/MORRISONS_API_FIX.md).
 
 ---
 
-**Built with ❤️ using Playwright, Python, and modern async patterns**
+**Built using Playwright, Python, and modern async patterns**
 
